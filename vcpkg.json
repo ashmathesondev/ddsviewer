@@ -1,0 +1,14 @@
+{
+  "name": "ddsviewer",
+  "version": "0.1.0",
+  "dependencies": [
+    "sdl3",
+    {
+      "name": "imgui",
+      "features": ["sdl3-binding", "sdl3-renderer-binding"]
+    },
+    "directxtex",
+    "nativefiledialog-extended",
+    "gtest"
+  ]
+}
