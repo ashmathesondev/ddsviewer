@@ -116,6 +116,7 @@ std::expected<TextureData, std::string> DDSLoader::Load(const std::filesystem::p
         data.images.resize(data.layerCount);
         for (uint32_t d = 0; d < data.layerCount; ++d) {
             const DirectX::Image* img = source->GetImage(0, 0, d);
+            if (!img) return std::unexpected("Internal error: GetImage returned null for depth slice " + std::to_string(d));
             data.images[d].push_back(ExtractImage(*img, isFloat));
         }
     } else {
@@ -125,6 +126,7 @@ std::expected<TextureData, std::string> DDSLoader::Load(const std::filesystem::p
             data.images[layer].resize(data.mipCount);
             for (uint32_t mip = 0; mip < data.mipCount; ++mip) {
                 const DirectX::Image* img = source->GetImage(mip, layer, 0);
+                if (!img) return std::unexpected("Internal error: GetImage returned null at layer " + std::to_string(layer) + " mip " + std::to_string(mip));
                 data.images[layer][mip] = ExtractImage(*img, isFloat);
             }
         }
