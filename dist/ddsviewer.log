@@ -1,0 +1,4 @@
+[2026-05-24 21:15:17.911] [info] [main.cpp:12] DDS Viewer v0.1.1 starting
+[2026-05-24 21:15:17.940] [trace] [main.cpp:18] SDL initialized
+[2026-05-24 21:15:18.150] [trace] [main.cpp:36] SDL window and renderer created
+[2026-05-24 21:15:21.091] [info] [main.cpp:80] DDS Viewer shutdown
