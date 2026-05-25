@@ -21,10 +21,16 @@ A cross-platform desktop viewer for DirectDraw Surface (`.dds`) texture files.
 
 ## Building
 
-**Windows (PowerShell):**
+**Windows (PowerShell) — quick:**
 ```powershell
 cmake -B build -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
 cmake --build build --config Release
+```
+
+**Windows — using the generation script:**
+```powershell
+./generate-build-files.ps1 -Target windows -SkipVs2026
+cmake --build build/vs2022 --config Release
 ```
 
 **Linux / macOS:**
@@ -32,6 +38,23 @@ cmake --build build --config Release
 cmake -B build -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
 cmake --build build
 ```
+
+## Installing (self-contained dist folder)
+
+Builds a `dist/` folder containing `ddsviewer` and all required DLLs/shared libraries.
+
+**Windows — one step:**
+```powershell
+./generate-build-files.ps1 -Target windows -SkipVs2026 -Install
+# Output: dist/ddsviewer.exe + SDL3.dll, DirectXTex.dll, nfd.dll
+```
+
+**Manual install (any platform):**
+```bash
+cmake --install build --prefix dist --config Release
+```
+
+The resulting `dist/` folder is self-contained and can be copied anywhere.
 
 ## Usage
 
@@ -44,9 +67,6 @@ Drag a `.dds` file onto the window or use **File → Open** (Ctrl+O).
 ## Running Tests
 
 ```powershell
-# Generate test fixtures (first time only)
-./build/Release/generate_fixtures.exe tests/fixtures
-
 # Run all tests
 ctest --test-dir build -C Release --output-on-failure
 ```
