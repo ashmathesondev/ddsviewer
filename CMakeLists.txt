@@ -9,7 +9,6 @@ find_package(SDL3 CONFIG REQUIRED)
 find_package(imgui CONFIG REQUIRED)
 find_package(directxtex CONFIG REQUIRED)
 find_package(nfd CONFIG REQUIRED)
-find_package(GTest CONFIG REQUIRED)
 
 set(VIEWER_SOURCES
     src/main.cpp
@@ -20,16 +19,18 @@ set(VIEWER_SOURCES
 )
 
 add_executable(ddsviewer ${VIEWER_SOURCES})
+target_compile_features(ddsviewer PRIVATE cxx_std_23)
 target_include_directories(ddsviewer PRIVATE src)
+# Link SDL3main first (must precede SDL3 for correct MSVC linker ordering)
+if(TARGET SDL3::SDL3main)
+    target_link_libraries(ddsviewer PRIVATE SDL3::SDL3main)
+endif()
 target_link_libraries(ddsviewer PRIVATE
     SDL3::SDL3
     imgui::imgui
     Microsoft::DirectXTex
     nfd::nfd
 )
-if(TARGET SDL3::SDL3main)
-    target_link_libraries(ddsviewer PRIVATE SDL3::SDL3main)
-endif()
 
 enable_testing()
 add_subdirectory(tests)
