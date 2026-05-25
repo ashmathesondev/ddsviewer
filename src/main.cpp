@@ -3,32 +3,37 @@
 #include <imgui.h>
 #include <imgui_impl_sdl3.h>
 #include <imgui_impl_sdlrenderer3.h>
-#include <cstdio>
 #include "App.h"
+#include "Log.h"
 #include "version.h"
 
 int main(int argc, char* argv[]) {
+    Log::Init();
+    LOG_INFO("DDS Viewer {} starting", DDSVIEWER_GIT_DESCRIBE);
+
     if (!SDL_Init(SDL_INIT_VIDEO)) {
-        std::fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
+        LOG_ERROR("SDL_Init failed: {}", SDL_GetError());
         return 1;
     }
+    LOG_TRACE("SDL initialized");
 
     SDL_Window* window = SDL_CreateWindow(
         "DDS Viewer " DDSVIEWER_GIT_DESCRIBE, 1280, 720,
         SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY);
     if (!window) {
-        std::fprintf(stderr, "SDL_CreateWindow failed: %s\n", SDL_GetError());
+        LOG_ERROR("SDL_CreateWindow failed: {}", SDL_GetError());
         SDL_Quit();
         return 1;
     }
 
     SDL_Renderer* renderer = SDL_CreateRenderer(window, nullptr);
     if (!renderer) {
-        std::fprintf(stderr, "SDL_CreateRenderer failed: %s\n", SDL_GetError());
+        LOG_ERROR("SDL_CreateRenderer failed: {}", SDL_GetError());
         SDL_DestroyWindow(window);
         SDL_Quit();
         return 1;
     }
+    LOG_TRACE("SDL window and renderer created");
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -72,5 +77,7 @@ int main(int argc, char* argv[]) {
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
     SDL_Quit();
+    LOG_INFO("DDS Viewer shutdown");
+    spdlog::shutdown();
     return 0;
 }

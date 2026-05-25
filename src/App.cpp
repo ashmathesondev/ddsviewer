@@ -1,6 +1,7 @@
 #define NOMINMAX
 #include "App.h"
 #include "DDSLoader.h"
+#include "Log.h"
 #include <imgui.h>
 #include <nfd.hpp>
 #include <cmath>
@@ -15,16 +16,22 @@ App::~App() {
 }
 
 void App::LoadFile(const std::filesystem::path& path) {
+    LOG_INFO("Loading file: {}", path.string());
     errorMsg_.clear();
     view_ = TextureView{};
     auto result = DDSLoader::Load(path);
     if (!result) {
         errorMsg_ = result.error();
+        LOG_ERROR("Load failed: {}", errorMsg_);
         data_.reset();
         texRenderer_.Clear();
         return;
     }
     data_ = std::move(*result);
+    LOG_INFO("Loaded: {}x{} {} ({} mip{}, {} layer{})",
+        data_->baseWidth, data_->baseHeight, data_->formatName,
+        data_->mipCount, data_->mipCount != 1 ? "s" : "",
+        data_->layerCount, data_->layerCount != 1 ? "s" : "");
     texRenderer_.Upload(*data_, view_);
 }
 
@@ -34,6 +41,10 @@ void App::OpenFileDialog() {
     const nfdresult_t res = NFD::OpenDialog(outPath, filters, 1);
     if (res == NFD_OKAY)
         LoadFile(outPath.get());
+    else if (res == NFD_CANCEL)
+        LOG_TRACE("File dialog cancelled");
+    else
+        LOG_ERROR("File dialog error: {}", NFD::GetError());
 }
 
 SDL_FRect App::CanvasRect() const {

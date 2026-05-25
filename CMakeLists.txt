@@ -33,6 +33,7 @@ find_package(SDL3 CONFIG REQUIRED)
 find_package(imgui CONFIG REQUIRED)
 find_package(directxtex CONFIG REQUIRED)
 find_package(nfd CONFIG REQUIRED)
+find_package(spdlog CONFIG REQUIRED)
 
 set(VIEWER_SOURCES
     src/main.cpp
@@ -40,6 +41,7 @@ set(VIEWER_SOURCES
     src/DDSLoader.cpp
     src/TextureRenderer.cpp
     src/UIPanel.cpp
+    src/Log.cpp
 )
 
 add_executable(ddsviewer ${VIEWER_SOURCES})
@@ -54,7 +56,12 @@ target_link_libraries(ddsviewer PRIVATE
     imgui::imgui
     Microsoft::DirectXTex
     nfd::nfd
+    spdlog::spdlog
 )
+
+if(MSVC)
+    target_compile_options(ddsviewer PRIVATE /utf-8)
+endif()
 
 enable_testing()
 add_subdirectory(tests)

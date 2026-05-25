@@ -20,9 +20,14 @@ target_link_libraries(ddsviewer_tests PRIVATE
     GTest::gtest
     GTest::gtest_main
     Microsoft::DirectXTex
+    spdlog::spdlog
 )
 
 target_compile_features(ddsviewer_tests PRIVATE cxx_std_23)
+
+if(MSVC)
+    target_compile_options(ddsviewer_tests PRIVATE /utf-8)
+endif()
 
 include(GoogleTest)
 gtest_discover_tests(ddsviewer_tests)

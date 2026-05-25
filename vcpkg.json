@@ -9,6 +9,7 @@
     },
     "directxtex",
     "nativefiledialog-extended",
-    "gtest"
+    "gtest",
+    "spdlog"
   ]
 }

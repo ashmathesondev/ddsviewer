@@ -1,4 +1,5 @@
 #include "DDSLoader.h"
+#include "Log.h"
 #include <DirectXTex.h>
 #include <cstring>
 #include <format>
@@ -60,18 +61,22 @@ static MipImage ExtractImage(const DirectX::Image& src, bool isFloat) {
 }
 
 std::expected<TextureData, std::string> DDSLoader::Load(const std::filesystem::path& path) {
-    if (!std::filesystem::exists(path))
+    if (!std::filesystem::exists(path)) {
+        LOG_ERROR("File not found: {}", path.string());
         return std::unexpected("File not found: " + path.string());
+    }
 
     DirectX::TexMetadata  metadata{};
     DirectX::ScratchImage raw;
 
+    LOG_TRACE("Parsing DDS: {}", path.filename().string());
     HRESULT hr = DirectX::LoadFromDDSFile(
         path.wstring().c_str(), DirectX::DDS_FLAGS_NONE, &metadata, raw);
-    if (FAILED(hr))
-        return std::unexpected(
-            std::format("Failed to parse DDS: HRESULT 0x{:08X}",
-                        static_cast<uint32_t>(hr)));
+    if (FAILED(hr)) {
+        auto msg = std::format("Failed to parse DDS: HRESULT 0x{:08X}", static_cast<uint32_t>(hr));
+        LOG_ERROR("{}", msg);
+        return std::unexpected(msg);
+    }
 
     const bool        isFloat      = IsFloatFormat(metadata.format);
     const DXGI_FORMAT targetFormat = isFloat
@@ -82,19 +87,25 @@ std::expected<TextureData, std::string> DDSLoader::Load(const std::filesystem::p
     DirectX::ScratchImage        converted;
 
     if (DirectX::IsCompressed(metadata.format)) {
+        LOG_TRACE("Decompressing {} -> target format", FormatName(metadata.format));
         hr = DirectX::Decompress(raw.GetImages(), raw.GetImageCount(),
                                  metadata, targetFormat, converted);
-        if (FAILED(hr))
-            return std::unexpected(
-                "Cannot decompress format: " + FormatName(metadata.format));
+        if (FAILED(hr)) {
+            auto msg = "Cannot decompress format: " + FormatName(metadata.format);
+            LOG_ERROR("{}", msg);
+            return std::unexpected(msg);
+        }
         source = &converted;
     } else if (metadata.format != targetFormat) {
+        LOG_TRACE("Converting {} -> target format", FormatName(metadata.format));
         hr = DirectX::Convert(raw.GetImages(), raw.GetImageCount(), metadata,
                               targetFormat, DirectX::TEX_FILTER_DEFAULT,
                               DirectX::TEX_THRESHOLD_DEFAULT, converted);
-        if (FAILED(hr))
-            return std::unexpected(
-                "Cannot convert format: " + FormatName(metadata.format));
+        if (FAILED(hr)) {
+            auto msg = "Cannot convert format: " + FormatName(metadata.format);
+            LOG_ERROR("{}", msg);
+            return std::unexpected(msg);
+        }
         source = &converted;
     }
 
