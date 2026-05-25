@@ -29,8 +29,14 @@ cmake --build build --config Release
 
 **Windows — using the generation script:**
 ```powershell
-./generate-build-files.ps1 -Target windows -SkipVs2026
+./generate-build-files.ps1 -Target windows
 cmake --build build/vs2022 --config Release
+```
+
+`generate-build-files.ps1` generates build files by default. To generate, build, and install a Release build to `dist/` in one step:
+
+```powershell
+./generate-build-files.ps1 -Install
 ```
 
 **Linux / macOS:**
@@ -70,6 +76,22 @@ Drag a `.dds` file onto the window or use **File → Open** (Ctrl+O).
 # Run all tests
 ctest --test-dir build -C Release --output-on-failure
 ```
+
+## Versioning
+
+The window title displays the version derived from the nearest git tag.
+
+**To release a new version:**
+
+```powershell
+git tag v1.2.0
+cmake -B build -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
+cmake --build build --config Release
+```
+
+The title will show `DDS Viewer v1.2.0`. Commits after a tag show the tag plus a commit offset and SHA, e.g. `DDS Viewer v1.2.0-3-gabcdef`. Uncommitted changes append `-dirty`.
+
+Version is read at **configure time** — re-run cmake after tagging to update it. The version template lives in `src/version.h.in`; the generated `version.h` is written to the build directory and not committed.
 
 ## Dependencies
 

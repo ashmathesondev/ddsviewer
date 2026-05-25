@@ -5,6 +5,7 @@
 #include <imgui_impl_sdlrenderer3.h>
 #include <cstdio>
 #include "App.h"
+#include "version.h"
 
 int main(int argc, char* argv[]) {
     if (!SDL_Init(SDL_INIT_VIDEO)) {
@@ -13,7 +14,7 @@ int main(int argc, char* argv[]) {
     }
 
     SDL_Window* window = SDL_CreateWindow(
-        "DDS Viewer", 1280, 720,
+        "DDS Viewer " DDSVIEWER_GIT_DESCRIBE, 1280, 720,
         SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY);
     if (!window) {
         std::fprintf(stderr, "SDL_CreateWindow failed: %s\n", SDL_GetError());
