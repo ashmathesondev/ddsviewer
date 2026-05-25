@@ -53,9 +53,7 @@ void App::HandleEvent(const SDL_Event& event) {
             break;
 
         case SDL_EVENT_DROP_FILE: {
-            std::string p = event.drop.data;
-            SDL_free(const_cast<char*>(event.drop.data));
-            LoadFile(p);
+            LoadFile(std::filesystem::path(event.drop.data));
             break;
         }
 
@@ -66,20 +64,23 @@ void App::HandleEvent(const SDL_Event& event) {
             break;
 
         case SDL_EVENT_MOUSE_WHEEL: {
-            const SDL_FRect canvas = CanvasRect();
-            const float mx = event.wheel.mouse_x;
-            const float my = event.wheel.mouse_y;
-            if (mx >= canvas.x && mx < canvas.x + canvas.w &&
-                my >= canvas.y && my < canvas.y + canvas.h) {
-                const float factor = (event.wheel.y > 0) ? 1.1f : (1.0f / 1.1f);
-                view_.zoom = std::clamp(view_.zoom * factor, 0.05f, 32.0f);
-                if (data_) texRenderer_.Upload(*data_, view_);
+            if (!ImGui::GetIO().WantCaptureMouse) {
+                const SDL_FRect canvas = CanvasRect();
+                const float mx = event.wheel.mouse_x;
+                const float my = event.wheel.mouse_y;
+                if (mx >= canvas.x && mx < canvas.x + canvas.w &&
+                    my >= canvas.y && my < canvas.y + canvas.h) {
+                    const float factor = (event.wheel.y > 0) ? 1.1f : (1.0f / 1.1f);
+                    view_.zoom = std::clamp(view_.zoom * factor, 0.05f, 32.0f);
+                    if (data_) texRenderer_.Upload(*data_, view_);
+                }
             }
             break;
         }
 
         case SDL_EVENT_MOUSE_BUTTON_DOWN:
-            if (event.button.button == SDL_BUTTON_LEFT) {
+            if (event.button.button == SDL_BUTTON_LEFT &&
+                !ImGui::GetIO().WantCaptureMouse) {
                 dragging_   = true;
                 dragStartX_ = event.button.x;
                 dragStartY_ = event.button.y;

@@ -32,6 +32,10 @@ void TextureRenderer::Upload(const TextureData& data, const TextureView& view) {
                                      SDL_TEXTUREACCESS_STREAMING,
                                      static_cast<int>(src.width),
                                      static_cast<int>(src.height));
+        if (!texture_) {
+            texW_ = texH_ = 0;
+            return;
+        }
         texW_ = static_cast<int>(src.width);
         texH_ = static_cast<int>(src.height);
     }

@@ -86,25 +86,26 @@ bool UIPanel::Draw(TextureView& view, const TextureData* data,
         data->layerCount, data->layerCount > 1 ? "s" : "");
     ImGui::EndGroup();
 
-    ImGui::SameLine();
-    VerticalSeparator();
-    ImGui::SameLine();
-
-    // Mip selector
-    ImGui::BeginGroup();
-    ImGui::TextDisabled("Mip");
-    ImGui::SetNextItemWidth(60.0f);
-    int mip = view.mip;
-    if (ImGui::InputInt("##mip", &mip, 1)) {
-        view.mip = std::clamp(mip, 0, static_cast<int>(data->mipCount) - 1);
-        changed = true;
+    // Mip selector (hidden for 3D textures — DDSLoader stores only mip 0 for 3D)
+    if (!data->is3D) {
+        ImGui::SameLine();
+        VerticalSeparator();
+        ImGui::SameLine();
+        ImGui::BeginGroup();
+        ImGui::TextDisabled("Mip");
+        ImGui::SetNextItemWidth(60.0f);
+        int mip = view.mip;
+        if (ImGui::InputInt("##mip", &mip, 1)) {
+            view.mip = std::clamp(mip, 0, static_cast<int>(data->mipCount) - 1);
+            changed = true;
+        }
+        if (!data->images.empty() && !data->images[0].empty()) {
+            const MipImage& curMip = data->images[0][
+                std::clamp(view.mip, 0, static_cast<int>(data->images[0].size()) - 1)];
+            ImGui::TextDisabled("%ux%u", curMip.width, curMip.height);
+        }
+        ImGui::EndGroup();
     }
-    if (!data->images.empty() && !data->images[0].empty()) {
-        const MipImage& curMip = data->images[0][
-            std::clamp(view.mip, 0, static_cast<int>(data->images[0].size()) - 1)];
-        ImGui::TextDisabled("%ux%u", curMip.width, curMip.height);
-    }
-    ImGui::EndGroup();
 
     // Cubemap face buttons
     if (data->isCubemap) {
