@@ -34,3 +34,10 @@ target_link_libraries(ddsviewer PRIVATE
 
 enable_testing()
 add_subdirectory(tests)
+
+# Install rules — cmake --install <builddir> --prefix dist --config Release
+install(TARGETS ddsviewer RUNTIME DESTINATION .)
+if(WIN32)
+    # Copy dependent DLLs (SDL3, imgui, nfd, etc.) alongside the executable
+    install(FILES $<TARGET_RUNTIME_DLLS:ddsviewer> DESTINATION .)
+endif()

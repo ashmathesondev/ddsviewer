@@ -61,6 +61,14 @@ Generates Windows configs and forces a specific SDK version.
 ./generate-build-files.ps1 -Target unix -ExtraCMakeArgs @("-DCMAKE_BUILD_TYPE=Release")
 Generates Unix/macOS/Ninja configs and forwards additional CMake options.
 
+.EXAMPLE
+./generate-build-files.ps1 -Install
+Generates, builds Release, and installs to ./dist.
+
+.EXAMPLE
+./generate-build-files.ps1 -Install -InstallPrefix C:\MyApp\ddsviewer -InstallConfig Debug
+Generates, builds Debug, and installs to a custom prefix.
+
 .NOTES
 Requires CMake in PATH.
 Visual Studio 2026 generation requires a CMake version that supports
@@ -75,11 +83,16 @@ param(
     [switch]$DisableVcpkg,
     [switch]$NoFresh,
     [string]$WindowsSdkVersion,
-    [string[]]$ExtraCMakeArgs = @()
+    [string[]]$ExtraCMakeArgs = @(),
+    [switch]$Install,
+    [string]$InstallPrefix = "dist",
+    [string]$InstallConfig = "Release"
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+
+$script:GeneratedDirs = [System.Collections.Generic.List[hashtable]]::new()
 
 function Invoke-CMakeGenerate {
     param(
@@ -88,16 +101,24 @@ function Invoke-CMakeGenerate {
         [Parameter(Mandatory = $true)]
         [string]$BuildDir,
         [string]$Architecture,
-        [string[]]$AdditionalArgs = @()
+        [string[]]$AdditionalArgs = @(),
+        [bool]$MultiConfig = $false
     )
 
     New-Item -ItemType Directory -Path $BuildDir -Force | Out-Null
+
+    $script:GeneratedDirs.Add(@{ Path = $BuildDir; MultiConfig = $MultiConfig })
 
     $args = @(
         "-S", $SourceDir,
         "-B", $BuildDir,
         "-G", $Generator
     )
+
+    # Single-config generators need build type baked in at configure time
+    if ($Install -and -not $MultiConfig) {
+        $args += "-DCMAKE_BUILD_TYPE=$InstallConfig"
+    }
 
     if ((-not $NoFresh) -and (Test-Path -Path (Join-Path $BuildDir "CMakeCache.txt") -PathType Leaf)) {
         $args += "--fresh"
@@ -185,7 +206,8 @@ if ($Target -in @("all", "windows") -and $runningOnWindows) {
         -Generator "Visual Studio 17 2022" `
         -BuildDir (Join-Path $buildRootFullPath "vs2022") `
         -Architecture "x64" `
-        -AdditionalArgs ($vcpkgArgs + $windowsArgs)
+        -AdditionalArgs ($vcpkgArgs + $windowsArgs) `
+        -MultiConfig $true
 
     if (-not $SkipVs2026) {
         try {
@@ -194,7 +216,8 @@ if ($Target -in @("all", "windows") -and $runningOnWindows) {
                 -Generator "Visual Studio 18 2026" `
                 -BuildDir (Join-Path $buildRootFullPath "vs2026") `
                 -Architecture "x64" `
-                -AdditionalArgs ($vcpkgArgs + $windowsArgs)
+                -AdditionalArgs ($vcpkgArgs + $windowsArgs) `
+                -MultiConfig $true
         }
         catch {
             Write-Warning "VS 2026 generator is unavailable in this CMake version. Install a newer CMake or run with -SkipVs2026."
@@ -208,14 +231,16 @@ if ($Target -in @("all", "unix") -and ($runningOnLinux -or $runningOnMacOS)) {
         Invoke-CMakeGenerate `
             -Generator "Unix Makefiles" `
             -BuildDir (Join-Path $buildRootFullPath "linux-makefiles") `
-            -AdditionalArgs $vcpkgArgs
+            -AdditionalArgs $vcpkgArgs `
+            -MultiConfig $false
     }
 
     if ($runningOnMacOS) {
         Invoke-CMakeGenerate `
             -Generator "Xcode" `
             -BuildDir (Join-Path $buildRootFullPath "macos-xcode") `
-            -AdditionalArgs $vcpkgArgs
+            -AdditionalArgs $vcpkgArgs `
+            -MultiConfig $true
     }
 }
 
@@ -224,9 +249,37 @@ if ($Target -in @("all", "unix")) {
         Invoke-CMakeGenerate `
             -Generator "Ninja" `
             -BuildDir (Join-Path $buildRootFullPath "ninja") `
-            -AdditionalArgs $vcpkgArgs
+            -AdditionalArgs $vcpkgArgs `
+            -MultiConfig $false
     }
 }
 
 Write-Host ""
 Write-Host "CMake generation complete."
+
+if ($Install) {
+    $installPrefixFull = [System.IO.Path]::GetFullPath((Join-Path (Get-Location) $InstallPrefix))
+    Write-Host ""
+    Write-Host "Installing to: $installPrefixFull  (config: $InstallConfig)"
+
+    foreach ($entry in $script:GeneratedDirs) {
+        $buildDir = $entry.Path
+        $multiConfig = $entry.MultiConfig
+
+        Write-Host ""
+        Write-Host "Building: $buildDir"
+        $buildArgs = @("--build", $buildDir)
+        if ($multiConfig) { $buildArgs += @("--config", $InstallConfig) }
+        & cmake @buildArgs
+        if ($LASTEXITCODE -ne 0) { throw "Build failed for '$buildDir'." }
+
+        Write-Host "Installing: $buildDir -> $installPrefixFull"
+        $installArgs = @("--install", $buildDir, "--prefix", $installPrefixFull)
+        if ($multiConfig) { $installArgs += @("--config", $InstallConfig) }
+        & cmake @installArgs
+        if ($LASTEXITCODE -ne 0) { throw "Install failed for '$buildDir'." }
+    }
+
+    Write-Host ""
+    Write-Host "Install complete: $installPrefixFull"
+}
