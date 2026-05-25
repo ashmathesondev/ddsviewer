@@ -1,6 +1,30 @@
+# Build output
 build/
+build-clangd/
 dist/
+
+# Worktrees and tooling
 .worktrees/
 .superpowers/
-*.user
+
+# IDE / editor
 .vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.sln.docstates
+cmake-build-*/
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Compiled output that may land outside build/
+*.exe
+*.dll
+*.pdb
+*.lib
+*.exp
+*.obj
+*.o
