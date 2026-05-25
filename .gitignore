@@ -27,3 +27,10 @@ Thumbs.db
 *.exp
 *.obj
 *.o
+
+# Allow dist/ release artifacts (tracked via LFS)
+!dist/
+!dist/*.exe
+!dist/*.dll
+!dist/*.pdb
+!dist/*.lib
