@@ -47,6 +47,7 @@ build directories when those generators are available. To generate only VS 2026:
 ```
 
 **Linux / macOS:**
+
 ```bash
 cmake -B build
 cmake --build build
@@ -83,12 +84,14 @@ Ninja; on Windows, CMake can use the installed Visual Studio generator instead.
 Builds a `dist/` folder containing `ddsviewer` and all required DLLs/shared libraries.
 
 **Windows — one step:**
+
 ```powershell
 ./generate-build-files.ps1 -Target windows -SkipVs2026 -Install
 # Output: dist/ddsviewer.exe + SDL3.dll, DirectXTex.dll, nfd.dll
 ```
 
 **Manual install (any platform):**
+
 ```bash
 cmake --install build --prefix dist --config Release
 ```
@@ -132,10 +135,10 @@ Version is read at **configure time** — re-run cmake after tagging to update i
 
 All managed via [vcpkg](https://vcpkg.io/):
 
-| Library | Role |
-|---------|------|
-| [DirectXTex](https://github.com/microsoft/DirectXTex) | DDS decode (Microsoft) |
-| [SDL3](https://libsdl.org/) | Window, renderer, input, drag-and-drop |
-| [Dear ImGui](https://github.com/ocornut/imgui) | UI panels and controls |
-| [nativefiledialog-extended](https://github.com/btzy/nativefiledialog-extended) | Native file open dialog |
-| [Google Test](https://github.com/google/googletest) | Unit tests |
+| Library                                                                        | Role                                   |
+|--------------------------------------------------------------------------------|----------------------------------------|
+| [DirectXTex](https://github.com/microsoft/DirectXTex)                          | DDS decode (Microsoft)                 |
+| [SDL3](https://libsdl.org/)                                                    | Window, renderer, input, drag-and-drop |
+| [Dear ImGui](https://github.com/ocornut/imgui)                                 | UI panels and controls                 |
+| [nativefiledialog-extended](https://github.com/btzy/nativefiledialog-extended) | Native file open dialog                |
+| [Google Test](https://github.com/google/googletest)                            | Unit tests                             |
