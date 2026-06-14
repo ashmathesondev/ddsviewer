@@ -1,6 +1,7 @@
 {
   "name": "ddsviewer",
   "version": "0.1.0",
+  "builtin-baseline": "522253caf47268c1724f486a035e927a42a90092",
   "dependencies": [
     "sdl3",
     {

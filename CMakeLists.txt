@@ -1,4 +1,81 @@
 cmake_minimum_required(VERSION 3.25)
+
+set(_vcpkg_roots)
+if(DEFINED VCPKG_ROOT AND NOT "${VCPKG_ROOT}" STREQUAL "")
+    list(APPEND _vcpkg_roots "${VCPKG_ROOT}")
+endif()
+if(DEFINED ENV{VCPKG_ROOT} AND NOT "$ENV{VCPKG_ROOT}" STREQUAL "")
+    list(APPEND _vcpkg_roots "$ENV{VCPKG_ROOT}")
+endif()
+
+set(_vcpkg_root_toolchain)
+foreach(_vcpkg_root IN LISTS _vcpkg_roots)
+    file(TO_CMAKE_PATH "${_vcpkg_root}" _vcpkg_root_cmake)
+    set(_vcpkg_toolchain "${_vcpkg_root_cmake}/scripts/buildsystems/vcpkg.cmake")
+    if(EXISTS "${_vcpkg_toolchain}")
+        set(_vcpkg_root_toolchain "${_vcpkg_toolchain}")
+        break()
+    endif()
+endforeach()
+
+if(NOT _vcpkg_root_toolchain)
+    find_program(_vcpkg_executable NAMES vcpkg vcpkg.exe)
+    if(_vcpkg_executable)
+        get_filename_component(_vcpkg_root "${_vcpkg_executable}" DIRECTORY)
+        file(TO_CMAKE_PATH "${_vcpkg_root}" _vcpkg_root_cmake)
+        set(_vcpkg_toolchain "${_vcpkg_root_cmake}/scripts/buildsystems/vcpkg.cmake")
+        if(EXISTS "${_vcpkg_toolchain}")
+            set(_vcpkg_root_toolchain "${_vcpkg_toolchain}")
+        endif()
+    endif()
+endif()
+
+if(DEFINED CMAKE_TOOLCHAIN_FILE
+   AND NOT "${CMAKE_TOOLCHAIN_FILE}" STREQUAL ""
+   AND _vcpkg_root_toolchain
+   AND NOT "${CMAKE_TOOLCHAIN_FILE}" STREQUAL "${_vcpkg_root_toolchain}"
+   AND "${CMAKE_TOOLCHAIN_FILE}" MATCHES "Microsoft Visual Studio.*/VC/vcpkg/scripts/buildsystems/vcpkg\\.cmake$")
+    message(STATUS "Replacing Visual Studio bundled vcpkg toolchain with VCPKG_ROOT toolchain: ${_vcpkg_root_toolchain}")
+    set(CMAKE_TOOLCHAIN_FILE "${_vcpkg_root_toolchain}" CACHE FILEPATH "vcpkg toolchain file" FORCE)
+endif()
+
+if(DEFINED CMAKE_TOOLCHAIN_FILE
+   AND NOT "${CMAKE_TOOLCHAIN_FILE}" STREQUAL ""
+   AND NOT EXISTS "${CMAKE_TOOLCHAIN_FILE}")
+    message(WARNING "Ignoring missing CMAKE_TOOLCHAIN_FILE from cache: ${CMAKE_TOOLCHAIN_FILE}")
+    unset(CMAKE_TOOLCHAIN_FILE CACHE)
+    unset(CMAKE_TOOLCHAIN_FILE)
+endif()
+
+if(NOT DEFINED CMAKE_TOOLCHAIN_FILE OR "${CMAKE_TOOLCHAIN_FILE}" STREQUAL "")
+    if(_vcpkg_root_toolchain)
+        set(CMAKE_TOOLCHAIN_FILE "${_vcpkg_root_toolchain}" CACHE FILEPATH "vcpkg toolchain file")
+        message(STATUS "Using vcpkg toolchain: ${CMAKE_TOOLCHAIN_FILE}")
+    endif()
+
+    if(NOT DEFINED CMAKE_TOOLCHAIN_FILE)
+        message(STATUS "No vcpkg toolchain found. Set VCPKG_ROOT, pass -DVCPKG_ROOT=<path>, or pass -DCMAKE_TOOLCHAIN_FILE=<path>/scripts/buildsystems/vcpkg.cmake.")
+    endif()
+endif()
+
+if(DEFINED CMAKE_TOOLCHAIN_FILE
+   AND "${CMAKE_TOOLCHAIN_FILE}" MATCHES "vcpkg\\.cmake$"
+   AND NOT DEFINED VCPKG_TARGET_TRIPLET)
+    if(CMAKE_HOST_WIN32)
+        set(VCPKG_TARGET_TRIPLET "x64-windows" CACHE STRING "vcpkg target triplet")
+    elseif(CMAKE_HOST_SYSTEM_NAME STREQUAL "Linux")
+        set(VCPKG_TARGET_TRIPLET "x64-linux" CACHE STRING "vcpkg target triplet")
+    elseif(CMAKE_HOST_APPLE)
+        set(VCPKG_TARGET_TRIPLET "x64-osx" CACHE STRING "vcpkg target triplet")
+    endif()
+endif()
+
+if(DEFINED CMAKE_TOOLCHAIN_FILE
+   AND "${CMAKE_TOOLCHAIN_FILE}" MATCHES "vcpkg\\.cmake$"
+   AND NOT VCPKG_TOOLCHAIN)
+    include("${CMAKE_TOOLCHAIN_FILE}")
+endif()
+
 project(ddsviewer VERSION 0.1.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 23)

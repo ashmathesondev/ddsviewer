@@ -5,6 +5,7 @@
 #include <imgui.h>
 #include <nfd.hpp>
 #include <cmath>
+#include <iterator>
 
 App::App(SDL_Window* window, SDL_Renderer* renderer)
     : window_(window), renderer_(renderer), texRenderer_(renderer) {
@@ -37,8 +38,20 @@ void App::LoadFile(const std::filesystem::path& path) {
 
 void App::OpenFileDialog() {
     NFD::UniquePath outPath;
-    nfdfilteritem_t filters[] = {{"DDS Texture", "dds"}};
-    const nfdresult_t res = NFD::OpenDialog(outPath, filters, 1);
+    nfdfilteritem_t filters[] = {
+#ifdef _WIN32
+        {"Supported Images", "dds,png,jpg,jpeg,tga,bmp,gif,tif,tiff,wdp,jxr,hdp"},
+#else
+        {"Supported Images", "dds,tga"},
+#endif
+        {"DDS Texture", "dds"},
+#ifdef _WIN32
+        {"PNG Image", "png"},
+        {"JPEG Image", "jpg,jpeg"},
+#endif
+        {"Targa Image", "tga"}
+    };
+    const nfdresult_t res = NFD::OpenDialog(outPath, filters, std::size(filters));
     if (res == NFD_OKAY)
         LoadFile(outPath.get());
     else if (res == NFD_CANCEL)

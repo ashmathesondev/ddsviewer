@@ -23,7 +23,7 @@ A cross-platform desktop viewer for DirectDraw Surface (`.dds`) texture files.
 
 **Windows (PowerShell) — quick:**
 ```powershell
-cmake -B build -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
+cmake -B build
 cmake --build build --config Release
 ```
 
@@ -31,6 +31,13 @@ cmake --build build --config Release
 ```powershell
 ./generate-build-files.ps1 -Target windows
 cmake --build build/vs2022 --config Release
+```
+
+By default, the script generates both Visual Studio 2022 and Visual Studio 2026
+build directories when those generators are available. To generate only VS 2026:
+
+```powershell
+./generate-build-files.ps1 -Target windows -SkipVs2022
 ```
 
 `generate-build-files.ps1` generates build files by default. To generate, build, and install a Release build to `dist/` in one step:
@@ -41,9 +48,35 @@ cmake --build build/vs2022 --config Release
 
 **Linux / macOS:**
 ```bash
-cmake -B build -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
+cmake -B build
 cmake --build build
 ```
+
+When `VCPKG_ROOT` is set, the project automatically uses
+`$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake`. You can still override this by
+passing `-DCMAKE_TOOLCHAIN_FILE=...` explicitly.
+
+**CLion:**
+
+CLion may not inherit environment variables from your shell when launched from
+the Start menu. The project will also find `vcpkg` on `PATH`; if that is not
+available, add this to the CLion CMake profile options:
+
+```text
+-DVCPKG_ROOT=E:/vcpkg
+```
+
+Reload CMake after changing the profile.
+
+If CLion is using Ninja with MSVC, make sure the CLion toolchain is a Visual
+Studio toolchain so MSVC include paths are initialized. Otherwise DirectXTex's
+OpenMP dependency may fail to find `omp.h`.
+
+**Visual Studio Code / Insiders:**
+
+Use the CMake Tools extension and select the `Debug`, `Release`, or
+`RelWithDebInfo` configure preset. The presets intentionally do not force
+Ninja; on Windows, CMake can use the installed Visual Studio generator instead.
 
 ## Installing (self-contained dist folder)
 
@@ -73,9 +106,11 @@ Drag a `.dds` file onto the window or use **File → Open** (Ctrl+O).
 ## Running Tests
 
 ```powershell
-# Run all tests
-ctest --test-dir build -C Release --output-on-failure
+./run-tests.ps1
 ```
+
+Use `./run-tests.ps1 -TestRegex DDSLoader` to run a subset, or
+`./run-tests.ps1 -Generate` to create build files first when needed.
 
 ## Versioning
 
@@ -85,7 +120,7 @@ The window title displays the version derived from the nearest git tag.
 
 ```powershell
 git tag v1.2.0
-cmake -B build -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
+cmake -B build
 cmake --build build --config Release
 ```
 

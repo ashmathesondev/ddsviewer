@@ -1,8 +1,18 @@
 #include "DDSLoader.h"
 #include "Log.h"
 #include <DirectXTex.h>
+#include <algorithm>
+#include <cctype>
 #include <cstring>
 #include <format>
+#include <system_error>
+
+static std::string LowerExtension(const std::filesystem::path& path) {
+    std::string ext = path.extension().string();
+    std::ranges::transform(ext, ext.begin(),
+                           [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    return ext;
+}
 
 static bool IsFloatFormat(DXGI_FORMAT fmt) {
     return fmt == DXGI_FORMAT_BC6H_SF16          ||
@@ -41,8 +51,36 @@ static std::string FormatName(DXGI_FORMAT fmt) {
         case DXGI_FORMAT_R11G11B10_FLOAT:       return "R11G11B10_FLOAT";
         case DXGI_FORMAT_R9G9B9E5_SHAREDEXP:    return "R9G9B9E5_SHAREDEXP";
         case DXGI_FORMAT_B8G8R8A8_UNORM:        return "B8G8R8A8_UNORM";
+        case DXGI_FORMAT_B8G8R8X8_UNORM:        return "B8G8R8X8_UNORM";
+        case DXGI_FORMAT_B5G6R5_UNORM:          return "B5G6R5_UNORM";
+        case DXGI_FORMAT_B5G5R5A1_UNORM:        return "B5G5R5A1_UNORM";
         default: return std::format("DXGI_FORMAT_{}", static_cast<uint32_t>(fmt));
     }
+}
+
+static bool IsWICExtension(const std::string& ext) {
+    return ext == ".png"  ||
+           ext == ".jpg"  ||
+           ext == ".jpeg" ||
+           ext == ".bmp"  ||
+           ext == ".gif"  ||
+           ext == ".tif"  ||
+           ext == ".tiff" ||
+           ext == ".wdp"  ||
+           ext == ".jxr"  ||
+           ext == ".hdp";
+}
+
+static std::string ContainerName(const std::string& ext) {
+    if (ext == ".dds") return "DDS";
+    if (ext == ".png") return "PNG";
+    if (ext == ".jpg" || ext == ".jpeg") return "JPEG";
+    if (ext == ".tga") return "Targa";
+    if (ext == ".bmp") return "BMP";
+    if (ext == ".gif") return "GIF";
+    if (ext == ".tif" || ext == ".tiff") return "TIFF";
+    if (ext == ".wdp" || ext == ".jxr" || ext == ".hdp") return "JPEG XR";
+    return "Image";
 }
 
 static MipImage ExtractImage(const DirectX::Image& src, bool isFloat) {
@@ -69,11 +107,29 @@ std::expected<TextureData, std::string> DDSLoader::Load(const std::filesystem::p
     DirectX::TexMetadata  metadata{};
     DirectX::ScratchImage raw;
 
-    LOG_TRACE("Parsing DDS: {}", path.filename().string());
-    HRESULT hr = DirectX::LoadFromDDSFile(
-        path.wstring().c_str(), DirectX::DDS_FLAGS_NONE, &metadata, raw);
+    const std::string ext = LowerExtension(path);
+    HRESULT hr = S_OK;
+    if (ext == ".dds") {
+        LOG_TRACE("Parsing DDS: {}", path.filename().string());
+        hr = DirectX::LoadFromDDSFile(
+            path.wstring().c_str(), DirectX::DDS_FLAGS_NONE, &metadata, raw);
+    } else if (ext == ".tga") {
+        LOG_TRACE("Parsing TGA: {}", path.filename().string());
+        hr = DirectX::LoadFromTGAFile(path.wstring().c_str(), &metadata, raw);
+#ifdef _WIN32
+    } else if (IsWICExtension(ext)) {
+        LOG_TRACE("Parsing WIC image: {}", path.filename().string());
+        hr = DirectX::LoadFromWICFile(
+            path.wstring().c_str(), DirectX::WIC_FLAGS_NONE, &metadata, raw);
+#endif
+    } else {
+        auto msg = "Unsupported image format: " + (ext.empty() ? path.filename().string() : ext);
+        LOG_ERROR("{}", msg);
+        return std::unexpected(msg);
+    }
+
     if (FAILED(hr)) {
-        auto msg = std::format("Failed to parse DDS: HRESULT 0x{:08X}", static_cast<uint32_t>(hr));
+        auto msg = std::format("Failed to parse image: HRESULT 0x{:08X}", static_cast<uint32_t>(hr));
         LOG_ERROR("{}", msg);
         return std::unexpected(msg);
     }
@@ -110,6 +166,13 @@ std::expected<TextureData, std::string> DDSLoader::Load(const std::filesystem::p
     }
 
     TextureData data;
+    data.fileName       = path.filename().string();
+    data.containerName  = ContainerName(ext);
+    {
+        std::error_code ec;
+        data.fileSizeBytes = std::filesystem::file_size(path, ec);
+        if (ec) data.fileSizeBytes = 0;
+    }
     data.originalFormat = metadata.format;
     data.isFloat        = isFloat;
     data.baseWidth      = static_cast<uint32_t>(metadata.width);

@@ -30,6 +30,9 @@ Controls which platform group to generate.
 .PARAMETER SkipVs2026
 Skips attempting the Visual Studio 2026 generator.
 
+.PARAMETER SkipVs2022
+Skips generating the Visual Studio 2022 generator.
+
 .PARAMETER DisableVcpkg
 Disables automatic vcpkg toolchain integration from VCPKG_ROOT.
 
@@ -52,6 +55,10 @@ Generates all applicable configurations for the current host using vcpkg when av
 .EXAMPLE
 ./generate-build-files.ps1 -Target windows -SkipVs2026
 Generates only Visual Studio 2022 files on Windows.
+
+.EXAMPLE
+./generate-build-files.ps1 -Target windows -SkipVs2022
+Generates only Visual Studio 2026 files on Windows.
 
 .EXAMPLE
 ./generate-build-files.ps1 -Target windows -WindowsSdkVersion 10.0.26100.0
@@ -79,6 +86,7 @@ param(
     [string]$BuildRoot = "build",
     [ValidateSet("all", "windows", "unix")]
     [string]$Target = "all",
+    [switch]$SkipVs2022,
     [switch]$SkipVs2026,
     [switch]$DisableVcpkg,
     [switch]$NoFresh,
@@ -165,11 +173,16 @@ $runningOnWindows = $PSVersionTable.PSVersion.Major -lt 6 -or $IsWindows
 $runningOnMacOS = $PSVersionTable.PSVersion.Major -ge 6 -and $IsMacOS
 $runningOnLinux = $PSVersionTable.PSVersion.Major -ge 6 -and $IsLinux
 
+if ($Target -in @("all", "windows") -and $runningOnWindows -and $SkipVs2022 -and $SkipVs2026) {
+    throw "Both -SkipVs2022 and -SkipVs2026 were specified; no Visual Studio generators remain."
+}
+
 $vcpkgArgs = @()
 if (-not $DisableVcpkg -and $env:VCPKG_ROOT) {
     $vcpkgRoot = [System.IO.Path]::GetFullPath($env:VCPKG_ROOT)
     $vcpkgToolchain = Join-Path $vcpkgRoot "scripts/buildsystems/vcpkg.cmake"
-    $vcpkgExe = Join-Path $vcpkgRoot "vcpkg.exe"
+    $vcpkgExecutableName = if ($runningOnWindows) { "vcpkg.exe" } else { "vcpkg" }
+    $vcpkgExe = Join-Path $vcpkgRoot $vcpkgExecutableName
 
     if (Test-Path -Path $vcpkgToolchain -PathType Leaf) {
         $vcpkgArgs += "-DCMAKE_TOOLCHAIN_FILE=$vcpkgToolchain"
@@ -202,12 +215,14 @@ if ($WindowsSdkVersion) {
 }
 
 if ($Target -in @("all", "windows") -and $runningOnWindows) {
-    Invoke-CMakeGenerate `
-        -Generator "Visual Studio 17 2022" `
-        -BuildDir (Join-Path $buildRootFullPath "vs2022") `
-        -Architecture "x64" `
-        -AdditionalArgs ($vcpkgArgs + $windowsArgs) `
-        -MultiConfig $true
+    if (-not $SkipVs2022) {
+        Invoke-CMakeGenerate `
+            -Generator "Visual Studio 17 2022" `
+            -BuildDir (Join-Path $buildRootFullPath "vs2022") `
+            -Architecture "x64" `
+            -AdditionalArgs ($vcpkgArgs + $windowsArgs) `
+            -MultiConfig $true
+    }
 
     if (-not $SkipVs2026) {
         try {

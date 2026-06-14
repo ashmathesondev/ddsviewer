@@ -6,6 +6,17 @@
 #include <imgui_impl_sdl3.h>
 #include <imgui_impl_sdlrenderer3.h>
 #include <algorithm>
+#include <format>
+
+static std::string FormatFileSize(uintmax_t bytes) {
+    constexpr double kKiB = 1024.0;
+    constexpr double kMiB = 1024.0 * 1024.0;
+
+    if (bytes == 0) return "unknown size";
+    if (bytes < 1024) return std::format("{} B", bytes);
+    if (bytes < 1024 * 1024) return std::format("{:.1f} KiB", bytes / kKiB);
+    return std::format("{:.1f} MiB", bytes / kMiB);
+}
 
 static void VerticalSeparator() {
     ImVec2 pos = ImGui::GetCursorScreenPos();
@@ -72,22 +83,30 @@ bool UIPanel::Draw(TextureView& view, const TextureData* data,
                  ImGuiWindowFlags_NoBringToFrontOnFocus);
 
     if (!data) {
-        ImGui::TextDisabled("Drop a .dds file or use File \xe2\x86\x92 Open");
+        ImGui::TextDisabled("Drop a .dds, .png, .jpg, .tga, .bmp, .gif, or .tiff file or use File \xe2\x86\x92 Open");
         ImGui::End();
         return false;
     }
 
     // File info
     ImGui::BeginGroup();
-    ImGui::TextUnformatted(data->formatName.c_str());
-    ImGui::TextDisabled("%ux%u", data->baseWidth, data->baseHeight);
-    ImGui::TextDisabled("%u mip%s  %u layer%s",
-        data->mipCount,   data->mipCount   > 1 ? "s" : "",
-        data->layerCount, data->layerCount > 1 ? "s" : "");
+    ImGui::TextUnformatted(data->fileName.empty() ? data->containerName.c_str() : data->fileName.c_str());
+    ImGui::TextDisabled("%s image  %ux%u",
+        data->containerName.empty() ? "Loaded" : data->containerName.c_str(),
+        data->baseWidth, data->baseHeight);
+    const std::string fileSize = FormatFileSize(data->fileSizeBytes);
+    ImGui::TextDisabled("%s  %s", data->formatName.c_str(), fileSize.c_str());
+    if (data->mipCount > 1 || data->layerCount > 1 || data->isCubemap || data->is3D) {
+        ImGui::TextDisabled("%u mip%s  %u layer%s%s%s",
+            data->mipCount,   data->mipCount   > 1 ? "s" : "",
+            data->layerCount, data->layerCount > 1 ? "s" : "",
+            data->isCubemap ? "  cubemap" : "",
+            data->is3D ? "  3D" : "");
+    }
     ImGui::EndGroup();
 
     // Mip selector (hidden for 3D textures — DDSLoader stores only mip 0 for 3D)
-    if (!data->is3D) {
+    if (!data->is3D && data->mipCount > 1) {
         ImGui::SameLine();
         VerticalSeparator();
         ImGui::SameLine();

@@ -1,9 +1,57 @@
 #include <gtest/gtest.h>
+#define NOMINMAX
+#include <DirectXTex.h>
+#ifdef _WIN32
+#include <objbase.h>
+#include <wincodec.h>
+#endif
+#include <chrono>
+#include <cstdio>
 #include <filesystem>
 #include "DDSLoader.h"
 
 namespace fs = std::filesystem;
 static const fs::path FX = FIXTURES_DIR;
+
+#ifdef _WIN32
+class ComFixture : public ::testing::Test {
+protected:
+    void SetUp() override {
+        const HRESULT hr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+        uninitializeCom_ = SUCCEEDED(hr);
+    }
+
+    void TearDown() override {
+        if (uninitializeCom_) CoUninitialize();
+    }
+
+private:
+    bool uninitializeCom_ = false;
+};
+#endif
+
+static fs::path MakeTempImagePath(const char* extension) {
+    const auto ticks = std::chrono::steady_clock::now().time_since_epoch().count();
+    fs::path dir = fs::temp_directory_path() / ("ddsviewer_tests_" + std::to_string(ticks));
+    fs::create_directories(dir);
+    return dir / ("image" + std::string(extension));
+}
+
+static DirectX::ScratchImage MakeRGBA8Pattern() {
+    DirectX::ScratchImage img;
+    img.Initialize2D(DXGI_FORMAT_R8G8B8A8_UNORM, 2, 2, 1, 1);
+    const DirectX::Image* im = img.GetImage(0, 0, 0);
+
+    uint8_t* p = im->pixels;
+    p[0] = 255; p[1] = 128; p[2] = 0;   p[3] = 255;
+    p[4] = 0;   p[5] = 0;   p[6] = 255; p[7] = 255;
+
+    uint8_t* row1 = im->pixels + im->rowPitch;
+    row1[0] = 0;   row1[1] = 255; row1[2] = 0;   row1[3] = 255;
+    row1[4] = 255; row1[5] = 0;   row1[6] = 255; row1[7] = 255;
+
+    return img;
+}
 
 TEST(DDSLoader, FileNotFound) {
     auto result = DDSLoader::Load(FX / "does_not_exist.dds");
@@ -115,4 +163,99 @@ TEST(DDSLoader, FormatNameNotEmpty) {
     auto result = DDSLoader::Load(FX / "rgba8_uncompressed.dds");
     ASSERT_TRUE(result.has_value()) << result.error();
     EXPECT_FALSE(result->formatName.empty());
+}
+
+TEST(DDSLoader, FileMetadata) {
+    auto result = DDSLoader::Load(FX / "rgba8_uncompressed.dds");
+    ASSERT_TRUE(result.has_value()) << result.error();
+    EXPECT_EQ(result->fileName, "rgba8_uncompressed.dds");
+    EXPECT_EQ(result->containerName, "DDS");
+    EXPECT_GT(result->fileSizeBytes, 0u);
+}
+
+#ifdef _WIN32
+TEST_F(ComFixture, PNG) {
+    const fs::path path = MakeTempImagePath(".png");
+    DirectX::ScratchImage source = MakeRGBA8Pattern();
+    const HRESULT hr = DirectX::SaveToWICFile(
+        *source.GetImage(0, 0, 0), DirectX::WIC_FLAGS_NONE,
+        GUID_ContainerFormatPng, path.wstring().c_str());
+    ASSERT_TRUE(SUCCEEDED(hr));
+
+    auto result = DDSLoader::Load(path);
+    ASSERT_TRUE(result.has_value()) << result.error();
+    EXPECT_EQ(result->baseWidth, 2u);
+    EXPECT_EQ(result->baseHeight, 2u);
+    EXPECT_EQ(result->mipCount, 1u);
+    EXPECT_EQ(result->layerCount, 1u);
+    EXPECT_EQ(result->fileName, "image.png");
+    EXPECT_EQ(result->containerName, "PNG");
+    EXPECT_GT(result->fileSizeBytes, 0u);
+    EXPECT_FALSE(result->isFloat);
+    ASSERT_GE(result->images[0][0].pixels.size(), 8u);
+    EXPECT_EQ(result->images[0][0].pixels[0], 255u);
+    EXPECT_EQ(result->images[0][0].pixels[1], 128u);
+    EXPECT_EQ(result->images[0][0].pixels[2], 0u);
+    EXPECT_EQ(result->images[0][0].pixels[3], 255u);
+}
+
+TEST_F(ComFixture, JPEG) {
+    const fs::path path = MakeTempImagePath(".jpg");
+    DirectX::ScratchImage source = MakeRGBA8Pattern();
+    const HRESULT hr = DirectX::SaveToWICFile(
+        *source.GetImage(0, 0, 0), DirectX::WIC_FLAGS_NONE,
+        GUID_ContainerFormatJpeg, path.wstring().c_str());
+    ASSERT_TRUE(SUCCEEDED(hr));
+
+    auto result = DDSLoader::Load(path);
+    ASSERT_TRUE(result.has_value()) << result.error();
+    EXPECT_EQ(result->baseWidth, 2u);
+    EXPECT_EQ(result->baseHeight, 2u);
+    EXPECT_EQ(result->mipCount, 1u);
+    EXPECT_EQ(result->layerCount, 1u);
+    EXPECT_EQ(result->fileName, "image.jpg");
+    EXPECT_EQ(result->containerName, "JPEG");
+    EXPECT_GT(result->fileSizeBytes, 0u);
+    EXPECT_FALSE(result->isFloat);
+    EXPECT_EQ(result->images[0][0].pixels.size(), 16u);
+}
+#endif
+
+TEST(DDSLoader, TGA) {
+    const fs::path path = MakeTempImagePath(".tga");
+    DirectX::ScratchImage source = MakeRGBA8Pattern();
+    const HRESULT hr = DirectX::SaveToTGAFile(
+        *source.GetImage(0, 0, 0), path.wstring().c_str(), &source.GetMetadata());
+    ASSERT_TRUE(SUCCEEDED(hr));
+
+    auto result = DDSLoader::Load(path);
+    ASSERT_TRUE(result.has_value()) << result.error();
+    EXPECT_EQ(result->baseWidth, 2u);
+    EXPECT_EQ(result->baseHeight, 2u);
+    EXPECT_EQ(result->mipCount, 1u);
+    EXPECT_EQ(result->layerCount, 1u);
+    EXPECT_EQ(result->fileName, "image.tga");
+    EXPECT_EQ(result->containerName, "Targa");
+    EXPECT_GT(result->fileSizeBytes, 0u);
+    EXPECT_FALSE(result->isFloat);
+    ASSERT_GE(result->images[0][0].pixels.size(), 8u);
+    EXPECT_EQ(result->images[0][0].pixels[0], 255u);
+    EXPECT_EQ(result->images[0][0].pixels[1], 128u);
+    EXPECT_EQ(result->images[0][0].pixels[2], 0u);
+    EXPECT_EQ(result->images[0][0].pixels[3], 255u);
+}
+
+TEST(DDSLoader, UnsupportedExtension) {
+    const fs::path path = MakeTempImagePath(".txt");
+    {
+        FILE* file = nullptr;
+        ASSERT_EQ(fopen_s(&file, path.string().c_str(), "wb"), 0);
+        ASSERT_NE(file, nullptr);
+        fputs("not an image", file);
+        fclose(file);
+    }
+
+    auto result = DDSLoader::Load(path);
+    ASSERT_FALSE(result.has_value());
+    EXPECT_NE(result.error().find("Unsupported image format"), std::string::npos);
 }
