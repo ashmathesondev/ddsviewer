@@ -34,3 +34,4 @@ Thumbs.db
 !dist/*.dll
 !dist/*.pdb
 !dist/*.lib
+**.log
