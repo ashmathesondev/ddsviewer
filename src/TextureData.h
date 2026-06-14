@@ -11,6 +11,9 @@ struct MipImage {
 };
 
 struct TextureData {
+    std::string fileName;
+    std::string containerName;
+    uintmax_t   fileSizeBytes  = 0;
     DXGI_FORMAT originalFormat = DXGI_FORMAT_UNKNOWN;
     bool        isFloat        = false;  // true → pixels are RGBA32F
     uint32_t    baseWidth      = 0;

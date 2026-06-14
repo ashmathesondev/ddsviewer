@@ -2,15 +2,66 @@
   "version": 6,
   "configurePresets": [
     {
-      "name": "default",
-      "displayName": "Default (vcpkg)",
-      "generator": "Ninja",
-      "binaryDir": "${sourceDir}/build-clangd",
+      "name": "base",
+      "hidden": true,
       "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
       "cacheVariables": {
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "VCPKG_ROOT": "$env{VCPKG_ROOT}"
+      }
+    },
+    {
+      "name": "debug",
+      "displayName": "Debug",
+      "inherits": "base",
+      "binaryDir": "${sourceDir}/cmake-build-debug",
+      "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug"
       }
+    },
+    {
+      "name": "release",
+      "displayName": "Release",
+      "inherits": "base",
+      "binaryDir": "${sourceDir}/cmake-build-release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "relwithdebinfo",
+      "displayName": "RelWithDebInfo",
+      "inherits": "base",
+      "binaryDir": "${sourceDir}/cmake-build-relwithdebinfo",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo"
+      }
+    },
+    {
+      "name": "default",
+      "displayName": "Default (Debug)",
+      "inherits": "debug",
+      "binaryDir": "${sourceDir}/build-clangd"
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "debug",
+      "displayName": "Debug",
+      "configurePreset": "debug",
+      "configuration": "Debug"
+    },
+    {
+      "name": "release",
+      "displayName": "Release",
+      "configurePreset": "release",
+      "configuration": "Release"
+    },
+    {
+      "name": "relwithdebinfo",
+      "displayName": "RelWithDebInfo",
+      "configurePreset": "relwithdebinfo",
+      "configuration": "RelWithDebInfo"
     }
   ]
 }
