@@ -52,10 +52,28 @@
       "configuration": "Debug"
     },
     {
+      "name": "debug-ddsviewer",
+      "displayName": "Debug ddsviewer",
+      "configurePreset": "debug",
+      "configuration": "Debug",
+      "targets": [
+        "ddsviewer"
+      ]
+    },
+    {
       "name": "release",
       "displayName": "Release",
       "configurePreset": "release",
       "configuration": "Release"
+    },
+    {
+      "name": "release-ddsviewer",
+      "displayName": "Release ddsviewer",
+      "configurePreset": "release",
+      "configuration": "Release",
+      "targets": [
+        "ddsviewer"
+      ]
     },
     {
       "name": "relwithdebinfo",

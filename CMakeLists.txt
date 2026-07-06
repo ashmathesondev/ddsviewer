@@ -76,14 +76,17 @@ if(DEFINED CMAKE_TOOLCHAIN_FILE
     include("${CMAKE_TOOLCHAIN_FILE}")
 endif()
 
-project(ddsviewer VERSION 0.1.0 LANGUAGES CXX)
+project(ddsviewer VERSION 0.3.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 23)
 
-# Derive version string from the nearest git tag (e.g. v1.2.0).
-# Re-run cmake after tagging to pick up the new version.
+# Display version comes from project(... VERSION ...). Git describe is captured
+# separately for build provenance.
+set(DDSVIEWER_VERSION_MAJOR ${PROJECT_VERSION_MAJOR})
+set(DDSVIEWER_VERSION_MINOR ${PROJECT_VERSION_MINOR})
+set(DDSVIEWER_VERSION_PATCH ${PROJECT_VERSION_PATCH})
 find_package(Git QUIET)
-set(DDSVIEWER_GIT_DESCRIBE "v0.0.0-unversioned")
+set(DDSVIEWER_GIT_DESCRIBE "v${PROJECT_VERSION}-unversioned")
 if(Git_FOUND)
     execute_process(
         COMMAND ${GIT_EXECUTABLE} describe --tags --match "v*" --always --dirty=-dirty
@@ -92,15 +95,6 @@ if(Git_FOUND)
         OUTPUT_STRIP_TRAILING_WHITESPACE
         ERROR_QUIET
     )
-endif()
-if(DDSVIEWER_GIT_DESCRIBE MATCHES "^v([0-9]+)\\.([0-9]+)\\.([0-9]+)")
-    set(DDSVIEWER_VERSION_MAJOR ${CMAKE_MATCH_1})
-    set(DDSVIEWER_VERSION_MINOR ${CMAKE_MATCH_2})
-    set(DDSVIEWER_VERSION_PATCH ${CMAKE_MATCH_3})
-else()
-    set(DDSVIEWER_VERSION_MAJOR 0)
-    set(DDSVIEWER_VERSION_MINOR 0)
-    set(DDSVIEWER_VERSION_PATCH 0)
 endif()
 configure_file(src/version.h.in ${CMAKE_BINARY_DIR}/generated/version.h @ONLY)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

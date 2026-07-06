@@ -69,6 +69,11 @@ available, add this to the CLion CMake profile options:
 
 Reload CMake after changing the profile.
 
+The repository includes a shared `ddsviewer` run configuration in `.run/`.
+If CLion only shows `ddsviewer_tests`, reload CMake and select the `ddsviewer`
+configuration from the run configuration menu. You can also build just the app
+target with the `Debug ddsviewer` or `Release ddsviewer` CMake build preset.
+
 If CLion is using Ninja with MSVC, make sure the CLion toolchain is a Visual
 Studio toolchain so MSVC include paths are initialized. Otherwise DirectXTex's
 OpenMP dependency may fail to find `omp.h`.
@@ -117,19 +122,25 @@ Use `./run-tests.ps1 -TestRegex DDSLoader` to run a subset, or
 
 ## Versioning
 
-The window title displays the version derived from the nearest git tag.
+The window title displays the version declared in `CMakeLists.txt`:
+`project(ddsviewer VERSION x.y.z)`. The nearest git tag/commit from
+`git describe` is still logged at startup for build provenance.
 
 **To release a new version:**
 
 ```powershell
+<# bump project(ddsviewer VERSION x.y.z) in CMakeLists.txt #>
 git tag v1.2.0
 cmake -B build
 cmake --build build --config Release
 ```
 
-The title will show `DDS Viewer v1.2.0`. Commits after a tag show the tag plus a commit offset and SHA, e.g. `DDS Viewer v1.2.0-3-gabcdef`. Uncommitted changes append `-dirty`.
+The title will show `DDS Viewer 1.2.0`. The startup log also records the
+`git describe` value, e.g. `v1.2.0-3-gabcdef-dirty`.
 
-Version is read at **configure time** — re-run cmake after tagging to update it. The version template lives in `src/version.h.in`; the generated `version.h` is written to the build directory and not committed.
+Version is read at **configure time** — re-run CMake after changing it. The
+version template lives in `src/version.h.in`; the generated `version.h` is
+written to the build directory and not committed.
 
 ## Dependencies
 

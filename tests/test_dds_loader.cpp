@@ -173,6 +173,18 @@ TEST(DDSLoader, FileMetadata) {
     EXPECT_GT(result->fileSizeBytes, 0u);
 }
 
+TEST(DDSLoader, DdsDescMetadata) {
+    auto result = DDSLoader::Load(FX / "rgba8_uncompressed.dds");
+    ASSERT_TRUE(result.has_value()) << result.error();
+    ASSERT_TRUE(result->ddsDesc.has_value());
+    EXPECT_EQ(result->ddsDesc->magic, 0x20534444u);
+    EXPECT_EQ(result->ddsDesc->size, 124u);
+    EXPECT_EQ(result->ddsDesc->width, 4u);
+    EXPECT_EQ(result->ddsDesc->height, 4u);
+    EXPECT_EQ(result->ddsDesc->mipMapCount, 1u);
+    EXPECT_EQ(result->ddsDesc->pixelFormat.size, 32u);
+}
+
 #ifdef _WIN32
 TEST_F(ComFixture, PNG) {
     const fs::path path = MakeTempImagePath(".png");
@@ -191,6 +203,7 @@ TEST_F(ComFixture, PNG) {
     EXPECT_EQ(result->fileName, "image.png");
     EXPECT_EQ(result->containerName, "PNG");
     EXPECT_GT(result->fileSizeBytes, 0u);
+    EXPECT_FALSE(result->ddsDesc.has_value());
     EXPECT_FALSE(result->isFloat);
     ASSERT_GE(result->images[0][0].pixels.size(), 8u);
     EXPECT_EQ(result->images[0][0].pixels[0], 255u);
@@ -237,6 +250,7 @@ TEST(DDSLoader, TGA) {
     EXPECT_EQ(result->fileName, "image.tga");
     EXPECT_EQ(result->containerName, "Targa");
     EXPECT_GT(result->fileSizeBytes, 0u);
+    EXPECT_FALSE(result->ddsDesc.has_value());
     EXPECT_FALSE(result->isFloat);
     ASSERT_GE(result->images[0][0].pixels.size(), 8u);
     EXPECT_EQ(result->images[0][0].pixels[0], 255u);
