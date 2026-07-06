@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cstring>
+#include <fstream>
 #include <format>
 #include <system_error>
 
@@ -81,6 +82,102 @@ static std::string ContainerName(const std::string& ext) {
     if (ext == ".tif" || ext == ".tiff") return "TIFF";
     if (ext == ".wdp" || ext == ".jxr" || ext == ".hdp") return "JPEG XR";
     return "Image";
+}
+
+#pragma pack(push, 1)
+struct RawDdsPixelFormat {
+    uint32_t size;
+    uint32_t flags;
+    uint32_t fourCC;
+    uint32_t rgbBitCount;
+    uint32_t rBitMask;
+    uint32_t gBitMask;
+    uint32_t bBitMask;
+    uint32_t aBitMask;
+};
+
+struct RawDdsHeader {
+    uint32_t size;
+    uint32_t flags;
+    uint32_t height;
+    uint32_t width;
+    uint32_t pitchOrLinearSize;
+    uint32_t depth;
+    uint32_t mipMapCount;
+    uint32_t reserved1[11];
+    RawDdsPixelFormat ddspf;
+    uint32_t caps;
+    uint32_t caps2;
+    uint32_t caps3;
+    uint32_t caps4;
+    uint32_t reserved2;
+};
+
+struct RawDdsDx10Header {
+    uint32_t dxgiFormat;
+    uint32_t resourceDimension;
+    uint32_t miscFlag;
+    uint32_t arraySize;
+    uint32_t miscFlags2;
+};
+#pragma pack(pop)
+
+static_assert(sizeof(RawDdsPixelFormat) == 32);
+static_assert(sizeof(RawDdsHeader) == 124);
+static_assert(sizeof(RawDdsDx10Header) == 20);
+
+static constexpr uint32_t kDdsMagic = 0x20534444; // "DDS "
+static constexpr uint32_t kDx10FourCC = 0x30315844; // "DX10"
+
+static std::optional<DdsDescInfo> ReadDdsDesc(const std::filesystem::path& path) {
+    std::ifstream file(path, std::ios::binary);
+    if (!file) return std::nullopt;
+
+    uint32_t magic = 0;
+    RawDdsHeader header{};
+    file.read(reinterpret_cast<char*>(&magic), sizeof(magic));
+    file.read(reinterpret_cast<char*>(&header), sizeof(header));
+    if (!file || magic != kDdsMagic) return std::nullopt;
+
+    DdsDescInfo desc;
+    desc.magic             = magic;
+    desc.size              = header.size;
+    desc.flags             = header.flags;
+    desc.height            = header.height;
+    desc.width             = header.width;
+    desc.pitchOrLinearSize = header.pitchOrLinearSize;
+    desc.depth             = header.depth;
+    desc.mipMapCount       = header.mipMapCount;
+    std::ranges::copy(header.reserved1, desc.reserved1.begin());
+    desc.pixelFormat.size        = header.ddspf.size;
+    desc.pixelFormat.flags       = header.ddspf.flags;
+    desc.pixelFormat.fourCC      = header.ddspf.fourCC;
+    desc.pixelFormat.rgbBitCount = header.ddspf.rgbBitCount;
+    desc.pixelFormat.rBitMask    = header.ddspf.rBitMask;
+    desc.pixelFormat.gBitMask    = header.ddspf.gBitMask;
+    desc.pixelFormat.bBitMask    = header.ddspf.bBitMask;
+    desc.pixelFormat.aBitMask    = header.ddspf.aBitMask;
+    desc.caps      = header.caps;
+    desc.caps2     = header.caps2;
+    desc.caps3     = header.caps3;
+    desc.caps4     = header.caps4;
+    desc.reserved2 = header.reserved2;
+
+    if (header.ddspf.fourCC == kDx10FourCC) {
+        RawDdsDx10Header dx10{};
+        file.read(reinterpret_cast<char*>(&dx10), sizeof(dx10));
+        if (file) {
+            desc.dx10Header = DdsDx10HeaderInfo{
+                .dxgiFormat        = dx10.dxgiFormat,
+                .resourceDimension = dx10.resourceDimension,
+                .miscFlag          = dx10.miscFlag,
+                .arraySize         = dx10.arraySize,
+                .miscFlags2        = dx10.miscFlags2,
+            };
+        }
+    }
+
+    return desc;
 }
 
 static MipImage ExtractImage(const DirectX::Image& src, bool isFloat) {
@@ -182,6 +279,9 @@ std::expected<TextureData, std::string> DDSLoader::Load(const std::filesystem::p
     data.isCubemap      = (metadata.miscFlags & DirectX::TEX_MISC_TEXTURECUBE) != 0;
     data.is3D           = (metadata.dimension == DirectX::TEX_DIMENSION_TEXTURE3D);
     data.formatName     = FormatName(metadata.format);
+    if (ext == ".dds") {
+        data.ddsDesc = ReadDdsDesc(path);
+    }
 
     if (data.is3D) {
         // 3D textures: store depth slices at mip 0 as layers; skip higher mips

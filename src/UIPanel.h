@@ -18,4 +18,5 @@ public:
 
 private:
     float menuBarH_ = 0.0f;
+    bool showDdsDesc_ = false;
 };

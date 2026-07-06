@@ -9,7 +9,7 @@
 
 int main(int argc, char* argv[]) {
     Log::Init();
-    LOG_INFO("DDS Viewer {} starting", DDSVIEWER_GIT_DESCRIBE);
+    LOG_INFO("DDS Viewer {} starting ({})", DDSVIEWER_VERSION_STRING, DDSVIEWER_GIT_DESCRIBE);
 
     if (!SDL_Init(SDL_INIT_VIDEO)) {
         LOG_ERROR("SDL_Init failed: {}", SDL_GetError());
@@ -18,7 +18,7 @@ int main(int argc, char* argv[]) {
     LOG_TRACE("SDL initialized");
 
     SDL_Window* window = SDL_CreateWindow(
-        "DDS Viewer " DDSVIEWER_GIT_DESCRIBE, 1280, 720,
+        "DDS Viewer " DDSVIEWER_VERSION_STRING, 1280, 720,
         SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY);
     if (!window) {
         LOG_ERROR("SDL_CreateWindow failed: {}", SDL_GetError());
