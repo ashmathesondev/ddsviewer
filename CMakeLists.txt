@@ -1,10 +1,12 @@
 cmake_minimum_required(VERSION 3.25)
 
+option(DDSVIEWER_DISABLE_AUTO_VCPKG "Disable automatic vcpkg toolchain discovery" OFF)
+
 set(_vcpkg_roots)
-if(DEFINED VCPKG_ROOT AND NOT "${VCPKG_ROOT}" STREQUAL "")
+if(NOT DDSVIEWER_DISABLE_AUTO_VCPKG AND DEFINED VCPKG_ROOT AND NOT "${VCPKG_ROOT}" STREQUAL "")
     list(APPEND _vcpkg_roots "${VCPKG_ROOT}")
 endif()
-if(DEFINED ENV{VCPKG_ROOT} AND NOT "$ENV{VCPKG_ROOT}" STREQUAL "")
+if(NOT DDSVIEWER_DISABLE_AUTO_VCPKG AND DEFINED ENV{VCPKG_ROOT} AND NOT "$ENV{VCPKG_ROOT}" STREQUAL "")
     list(APPEND _vcpkg_roots "$ENV{VCPKG_ROOT}")
 endif()
 
@@ -18,7 +20,7 @@ foreach(_vcpkg_root IN LISTS _vcpkg_roots)
     endif()
 endforeach()
 
-if(NOT _vcpkg_root_toolchain)
+if(NOT DDSVIEWER_DISABLE_AUTO_VCPKG AND NOT _vcpkg_root_toolchain)
     find_program(_vcpkg_executable NAMES vcpkg vcpkg.exe)
     if(_vcpkg_executable)
         get_filename_component(_vcpkg_root "${_vcpkg_executable}" DIRECTORY)
@@ -47,7 +49,7 @@ if(DEFINED CMAKE_TOOLCHAIN_FILE
     unset(CMAKE_TOOLCHAIN_FILE)
 endif()
 
-if(NOT DEFINED CMAKE_TOOLCHAIN_FILE OR "${CMAKE_TOOLCHAIN_FILE}" STREQUAL "")
+if(NOT DDSVIEWER_DISABLE_AUTO_VCPKG AND (NOT DEFINED CMAKE_TOOLCHAIN_FILE OR "${CMAKE_TOOLCHAIN_FILE}" STREQUAL ""))
     if(_vcpkg_root_toolchain)
         set(CMAKE_TOOLCHAIN_FILE "${_vcpkg_root_toolchain}" CACHE FILEPATH "vcpkg toolchain file")
         message(STATUS "Using vcpkg toolchain: ${CMAKE_TOOLCHAIN_FILE}")
@@ -76,7 +78,7 @@ if(DEFINED CMAKE_TOOLCHAIN_FILE
     include("${CMAKE_TOOLCHAIN_FILE}")
 endif()
 
-project(ddsviewer VERSION 0.3.0 LANGUAGES CXX)
+project(ddsviewer VERSION 0.3.1 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 23)
 

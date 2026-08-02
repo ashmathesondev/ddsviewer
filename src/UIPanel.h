@@ -6,7 +6,7 @@
 
 class UIPanel {
 public:
-    static constexpr float kPanelHeight = 84.0f;
+    static constexpr float kPanelHeight = 104.0f;
 
     // Returns true if view changed and texture must be re-uploaded.
     // data may be nullptr (no file loaded yet).

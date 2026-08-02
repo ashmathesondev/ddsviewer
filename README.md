@@ -33,8 +33,10 @@ cmake --build build --config Release
 cmake --build build/vs2022 --config Release
 ```
 
-By default, the script generates both Visual Studio 2022 and Visual Studio 2026
-build directories when those generators are available. To generate only VS 2026:
+By default, the script generates build directories only for Visual Studio
+versions that are installed. It also pins Visual Studio generation to an
+installed MSVC toolset that the generated project can build with. To generate
+only VS 2026:
 
 ```powershell
 ./generate-build-files.ps1 -Target windows -SkipVs2022
@@ -123,8 +125,11 @@ Use `./run-tests.ps1 -TestRegex DDSLoader` to run a subset, or
 ## Versioning
 
 The window title displays the version declared in `CMakeLists.txt`:
-`project(ddsviewer VERSION x.y.z)`. The nearest git tag/commit from
-`git describe` is still logged at startup for build provenance.
+`project(ddsviewer VERSION x.y.z)`. This is the **only** source of the
+displayed version — there is no CI/CD pipeline in this repo, and creating a
+git tag does **not** by itself change the displayed version. The nearest git
+tag/commit from `git describe` is separately logged at startup for build
+provenance only.
 
 **To release a new version:**
 
@@ -135,8 +140,10 @@ cmake -B build
 cmake --build build --config Release
 ```
 
-The title will show `DDS Viewer 1.2.0`. The startup log also records the
-`git describe` value, e.g. `v1.2.0-3-gabcdef-dirty`.
+The `CMakeLists.txt` bump is what makes the title show `DDS Viewer 1.2.0`; the
+`git tag` step only makes `git describe` (logged at startup, e.g.
+`v1.2.0-3-gabcdef-dirty`) match. Skipping the tag still leaves the title
+correct; skipping the `CMakeLists.txt` edit does not.
 
 Version is read at **configure time** — re-run CMake after changing it. The
 version template lives in `src/version.h.in`; the generated `version.h` is
