@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <cctype>
 #include <format>
+#include <string_view>
 
 static std::string FormatFileSize(uintmax_t bytes) {
     constexpr double kKiB = 1024.0;
@@ -17,6 +18,62 @@ static std::string FormatFileSize(uintmax_t bytes) {
     if (bytes < 1024) return std::format("{} B", bytes);
     if (bytes < 1024 * 1024) return std::format("{:.1f} KiB", bytes / kKiB);
     return std::format("{:.1f} MiB", bytes / kMiB);
+}
+
+static std::string FormatDimensions(const TextureData& data) {
+    if (data.is3D) {
+        return std::format("{} x {} x {}", data.baseWidth, data.baseHeight, data.depth);
+    }
+    return std::format("{} x {}", data.baseWidth, data.baseHeight);
+}
+
+static std::string FormatTextureType(const TextureData& data) {
+    if (data.is3D) return "3D volume";
+    if (data.isCubemap) return data.layerCount > 6 ? "Cube map array" : "Cube map";
+    if (data.layerCount > 1) return "2D texture array";
+    return "2D texture";
+}
+
+static std::string FormatMipSummary(const TextureData& data) {
+    return std::format("{} level{}", data.mipCount, data.mipCount == 1 ? "" : "s");
+}
+
+static std::string FormatSliceSummary(const TextureData& data) {
+    if (data.is3D) {
+        return std::format("{} depth slice{}", data.layerCount, data.layerCount == 1 ? "" : "s");
+    }
+    if (data.isCubemap) {
+        return data.layerCount > 6
+            ? std::format("{} faces/slices", data.layerCount)
+            : "6 faces";
+    }
+    return std::format("{} layer{}", data.layerCount, data.layerCount == 1 ? "" : "s");
+}
+
+static std::string FormatPreviewStorage(const TextureData& data) {
+    return data.isFloat ? "RGBA32F preview" : "RGBA8 preview";
+}
+
+static void SummaryCell(const char* label, const std::string& value) {
+    ImGui::TableNextColumn();
+    ImGui::TextDisabled("%s", label);
+    ImGui::TextWrapped("%s", value.c_str());
+}
+
+static void SummaryCell(const char* label, const char* value) {
+    SummaryCell(label, std::string(value));
+}
+
+static void DetailRow(const char* label, const std::string& value) {
+    ImGui::TableNextRow();
+    ImGui::TableNextColumn();
+    ImGui::TextDisabled("%s", label);
+    ImGui::TableNextColumn();
+    ImGui::TextWrapped("%s", value.c_str());
+}
+
+static void DetailRow(const char* label, const char* value) {
+    DetailRow(label, std::string(value));
 }
 
 static void VerticalSeparator() {
@@ -58,12 +115,129 @@ static std::string FormatFourCC(uint32_t value) {
     return std::format("'{}' ({})", text, FormatHex(value));
 }
 
-static void DescRow(const char* name, uint32_t value) {
+static void FieldNameWithTooltip(const char* name, const char* description) {
+    ImGui::TextUnformatted(name);
+    if (description && ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort)) {
+        ImGui::BeginTooltip();
+        ImGui::PushTextWrapPos(ImGui::GetFontSize() * 32.0f);
+        ImGui::TextUnformatted(description);
+        ImGui::PopTextWrapPos();
+        ImGui::EndTooltip();
+    }
+}
+
+static const char* DescribeDdsHeaderField(const char* name) {
+    const std::string_view field{name};
+    if (field == "magic") return "DDS file signature. Valid DDS files start with the four bytes 'DDS '.";
+    if (field == "dwSize") return "Size of the DDS_HEADER structure in bytes. The standard value is 124.";
+    if (field == "dwFlags") return "Bitmask that says which DDS_HEADER fields contain valid data.";
+    if (field == "dwHeight") return "Texture height in pixels at mip level 0.";
+    if (field == "dwWidth") return "Texture width in pixels at mip level 0.";
+    if (field == "dwPitchOrLinearSize") return "For uncompressed textures, row pitch in bytes. For compressed textures, total bytes for the top mip level.";
+    if (field == "dwDepth") return "Depth in slices for a volume texture. Usually 0 for 1D, 2D, arrays, and cube maps.";
+    if (field == "dwMipMapCount") return "Number of mip levels stored in the file when DDSD_MIPMAPCOUNT is set.";
+    if (field == "dwCaps") return "Surface capability flags, such as texture, mipmap, or complex surface.";
+    if (field == "dwCaps2") return "Additional capability flags, including cube-map faces and volume texture markers.";
+    if (field == "dwCaps3") return "Legacy DirectDraw capability field. Modern DDS files usually leave this as 0.";
+    if (field == "dwCaps4") return "Legacy DirectDraw capability field. Modern DDS files usually leave this as 0.";
+    if (field == "dwReserved2") return "Reserved header field. DDS writers should set this to 0.";
+    return nullptr;
+}
+
+static const char* DescribeDdsPixelFormatField(const char* name) {
+    const std::string_view field{name};
+    if (field == "dwSize") return "Size of the DDS_PIXELFORMAT structure in bytes. The standard value is 32.";
+    if (field == "dwFlags") return "Bitmask that describes how to interpret the pixel format fields.";
+    if (field == "dwFourCC") return "Four-character code for compressed formats or the DX10 extended header marker.";
+    if (field == "dwRGBBitCount") return "Bits per pixel for uncompressed RGB, RGBA, luminance, or alpha formats.";
+    if (field == "dwRBitMask") return "Bit mask for the red channel in uncompressed formats.";
+    if (field == "dwGBitMask") return "Bit mask for the green channel in uncompressed formats.";
+    if (field == "dwBBitMask") return "Bit mask for the blue channel in uncompressed formats.";
+    if (field == "dwABitMask") return "Bit mask for the alpha channel in uncompressed formats.";
+    return nullptr;
+}
+
+static const char* DescribeDdsDx10Field(const char* name) {
+    const std::string_view field{name};
+    if (field == "dxgiFormat") return "DXGI_FORMAT enum value that identifies the texture's exact pixel format.";
+    if (field == "resourceDimension") return "Resource shape: 1D, 2D, 3D, buffer, or unknown.";
+    if (field == "miscFlag") return "Additional resource flags. In DDS files this commonly marks cube textures.";
+    if (field == "arraySize") return "Number of texture array elements. Cube maps use one array element per cube.";
+    if (field == "miscFlags2") return "Additional DX10 flags. The low bits encode alpha mode.";
+    return nullptr;
+}
+
+static std::string FormatResourceDimension(uint32_t value) {
+    switch (value) {
+        case 0: return "Unknown";
+        case 1: return "Buffer";
+        case 2: return "1D texture";
+        case 3: return "2D texture";
+        case 4: return "3D texture";
+        default: return std::format("Unknown ({})", value);
+    }
+}
+
+static std::string FormatAlphaMode(uint32_t miscFlags2) {
+    switch (miscFlags2 & 0x7u) {
+        case 0: return "Unknown";
+        case 1: return "Straight";
+        case 2: return "Premultiplied";
+        case 3: return "Opaque";
+        case 4: return "Custom";
+        default: return std::format("Reserved ({})", miscFlags2 & 0x7u);
+    }
+}
+
+static std::string FormatPixelFlagsSummary(uint32_t flags) {
+    struct PixelFlag {
+        const char* name;
+        uint32_t value;
+    };
+    static constexpr PixelFlag kPixelFlags[] = {
+        {"Alpha pixels", 0x00000001},
+        {"Alpha only", 0x00000002},
+        {"FourCC", 0x00000004},
+        {"RGB", 0x00000040},
+        {"YUV", 0x00000200},
+        {"Luminance", 0x00020000},
+    };
+
+    std::string summary;
+    uint32_t knownMask = 0;
+    for (const PixelFlag& flag : kPixelFlags) {
+        knownMask |= flag.value;
+        if ((flags & flag.value) == 0) continue;
+
+        if (!summary.empty()) summary += ", ";
+        summary += flag.name;
+    }
+
+    const uint32_t unknownFlags = flags & ~knownMask;
+    if (unknownFlags != 0) {
+        if (!summary.empty()) summary += ", ";
+        summary += std::format("Unknown {}", FormatHex(unknownFlags));
+    }
+    return summary.empty() ? "None" : summary;
+}
+
+static void DescRow(const char* name, uint32_t value, const char* description = nullptr) {
     ImGui::TableNextRow();
     ImGui::TableNextColumn();
-    ImGui::TextUnformatted(name);
+    FieldNameWithTooltip(name, description);
     ImGui::TableNextColumn();
     ImGui::Text("%u", value);
+    ImGui::TableNextColumn();
+    const std::string hex = FormatHex(value);
+    ImGui::TextUnformatted(hex.c_str());
+}
+
+static void DescRow(const char* name, const std::string& valueText, uint32_t value, const char* description = nullptr) {
+    ImGui::TableNextRow();
+    ImGui::TableNextColumn();
+    FieldNameWithTooltip(name, description);
+    ImGui::TableNextColumn();
+    ImGui::TextWrapped("%s", valueText.c_str());
     ImGui::TableNextColumn();
     const std::string hex = FormatHex(value);
     ImGui::TextUnformatted(hex.c_str());
@@ -75,6 +249,28 @@ struct FlagInfo {
     const char* meaning;
     bool legacy;
 };
+
+static std::string FormatFlagsSummary(uint32_t flags);
+
+template <size_t N>
+static std::string FormatFlagNames(uint32_t flags, const FlagInfo (&knownFlags)[N]) {
+    std::string summary;
+    uint32_t knownMask = 0;
+    for (const FlagInfo& flag : knownFlags) {
+        knownMask |= flag.value;
+        if ((flags & flag.value) == 0) continue;
+
+        if (!summary.empty()) summary += " | ";
+        summary += flag.name;
+    }
+
+    const uint32_t unknownFlags = flags & ~knownMask;
+    if (unknownFlags != 0) {
+        if (!summary.empty()) summary += " | ";
+        summary += std::format("UNKNOWN({})", FormatHex(unknownFlags));
+    }
+    return summary.empty() ? "none" : summary;
+}
 
 static void FlagRow(const FlagInfo& flag) {
     ImGui::TableNextRow();
@@ -89,10 +285,10 @@ static void FlagRow(const FlagInfo& flag) {
     ImGui::TextUnformatted(flag.meaning);
 }
 
-static void FourCCRow(const char* name, uint32_t value) {
+static void FourCCRow(const char* name, uint32_t value, const char* description = nullptr) {
     ImGui::TableNextRow();
     ImGui::TableNextColumn();
-    ImGui::TextUnformatted(name);
+    FieldNameWithTooltip(name, description);
     ImGui::TableNextColumn();
     const std::string text = FormatFourCC(value);
     ImGui::TextUnformatted(text.c_str());
@@ -110,6 +306,38 @@ static bool BeginDescTable(const char* id) {
     ImGui::TableSetupColumn("Hex");
     ImGui::TableHeadersRow();
     return true;
+}
+
+static void DrawDdsSummary(const TextureData& data, const DdsDescInfo& desc) {
+    if (!ImGui::CollapsingHeader("Summary", ImGuiTreeNodeFlags_DefaultOpen)) {
+        return;
+    }
+
+    if (!ImGui::BeginTable("dds_summary", 2,
+        ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp)) {
+        return;
+    }
+    ImGui::TableSetupColumn("Property", ImGuiTableColumnFlags_WidthFixed, 150.0f);
+    ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch);
+
+    DetailRow("Texture", FormatTextureType(data));
+    DetailRow("Dimensions", FormatDimensions(data));
+    DetailRow("Format", data.formatName.empty() ? "Unknown" : data.formatName);
+    DetailRow("Container", data.containerName.empty() ? "Image" : data.containerName);
+    DetailRow("File size", FormatFileSize(data.fileSizeBytes));
+    DetailRow("Mip levels", FormatMipSummary(data));
+    DetailRow(data.is3D ? "Depth" : data.isCubemap ? "Faces" : "Layers", FormatSliceSummary(data));
+    DetailRow("Preview storage", FormatPreviewStorage(data));
+    DetailRow("Header flags", FormatFlagsSummary(desc.flags));
+    DetailRow("Pixel flags", FormatPixelFlagsSummary(desc.pixelFormat.flags));
+    DetailRow("FourCC", FormatFourCC(desc.pixelFormat.fourCC));
+    if (desc.dx10Header) {
+        DetailRow("DX10 dimension", FormatResourceDimension(desc.dx10Header->resourceDimension));
+        DetailRow("DX10 array size", std::to_string(desc.dx10Header->arraySize));
+        DetailRow("Alpha mode", FormatAlphaMode(desc.dx10Header->miscFlags2));
+    }
+
+    ImGui::EndTable();
 }
 
 static constexpr FlagInfo kDdsHeaderFlags[] = {
@@ -133,6 +361,40 @@ static constexpr FlagInfo kDdsHeaderFlags[] = {
     {"DDSD_FVF",              0x00200000, "legacy flexible-vertex-format field", true},
     {"DDSD_SRCVBHANDLE",      0x00400000, "legacy source vertex-buffer handle field", true},
     {"DDSD_DEPTH",            0x00800000, "dwDepth is valid for a volume texture", false},
+};
+
+static constexpr FlagInfo kDdsCapsFlags[] = {
+    {"DDSCAPS_ALPHA",          0x00000002, "Legacy alpha-only surface", true},
+    {"DDSCAPS_BACKBUFFER",     0x00000004, "Legacy back buffer surface", true},
+    {"DDSCAPS_COMPLEX",        0x00000008, "Surface has related surfaces, such as mipmaps or cube-map faces", false},
+    {"DDSCAPS_FLIP",           0x00000010, "Legacy flipping surface chain", true},
+    {"DDSCAPS_FRONTBUFFER",    0x00000020, "Legacy front buffer surface", true},
+    {"DDSCAPS_OFFSCREENPLAIN", 0x00000040, "Legacy offscreen plain surface", true},
+    {"DDSCAPS_OVERLAY",        0x00000080, "Legacy overlay surface", true},
+    {"DDSCAPS_PALETTE",        0x00000100, "Legacy palette surface", true},
+    {"DDSCAPS_PRIMARYSURFACE", 0x00000200, "Legacy primary display surface", true},
+    {"DDSCAPS_SYSTEMMEMORY",   0x00000800, "Legacy system-memory surface", true},
+    {"DDSCAPS_TEXTURE",        0x00001000, "Surface is a texture", false},
+    {"DDSCAPS_VIDEOMEMORY",    0x00004000, "Legacy video-memory surface", true},
+    {"DDSCAPS_VISIBLE",        0x00008000, "Legacy visible surface", true},
+    {"DDSCAPS_WRITEONLY",      0x00010000, "Legacy write-only surface", true},
+    {"DDSCAPS_ZBUFFER",        0x00020000, "Legacy z-buffer surface", true},
+    {"DDSCAPS_OWNDC",          0x00040000, "Legacy surface owns a device context", true},
+    {"DDSCAPS_LIVEVIDEO",      0x00080000, "Legacy live video surface", true},
+    {"DDSCAPS_HWCODEC",        0x00100000, "Legacy hardware codec surface", true},
+    {"DDSCAPS_MODEX",          0x00200000, "Legacy Mode X surface", true},
+    {"DDSCAPS_MIPMAP",         0x00400000, "Surface is one level in a mipmap chain", false},
+};
+
+static constexpr FlagInfo kDdsCaps2Flags[] = {
+    {"DDSCAPS2_CUBEMAP",           0x00000200, "Texture is a cube map", false},
+    {"DDSCAPS2_CUBEMAP_POSITIVEX", 0x00000400, "Cube map contains the +X face", false},
+    {"DDSCAPS2_CUBEMAP_NEGATIVEX", 0x00000800, "Cube map contains the -X face", false},
+    {"DDSCAPS2_CUBEMAP_POSITIVEY", 0x00001000, "Cube map contains the +Y face", false},
+    {"DDSCAPS2_CUBEMAP_NEGATIVEY", 0x00002000, "Cube map contains the -Y face", false},
+    {"DDSCAPS2_CUBEMAP_POSITIVEZ", 0x00004000, "Cube map contains the +Z face", false},
+    {"DDSCAPS2_CUBEMAP_NEGATIVEZ", 0x00008000, "Cube map contains the -Z face", false},
+    {"DDSCAPS2_VOLUME",            0x00200000, "Texture is a 3D volume texture", false},
 };
 
 static std::string FormatFlagsSummary(uint32_t flags) {
@@ -194,22 +456,24 @@ static void DrawDdsHeaderFlags(uint32_t flags) {
     ImGui::EndTable();
 }
 
-static void DrawDdsDescSection(const DdsDescInfo& desc) {
+static void DrawDdsDescSection(const TextureData& data, const DdsDescInfo& desc) {
+    DrawDdsSummary(data, desc);
+
     if (ImGui::CollapsingHeader("DDS_HEADER desc", ImGuiTreeNodeFlags_DefaultOpen)) {
         if (BeginDescTable("dds_desc")) {
-            DescRow("magic", desc.magic);
-            DescRow("dwSize", desc.size);
-            DescRow("dwFlags", desc.flags);
-            DescRow("dwHeight", desc.height);
-            DescRow("dwWidth", desc.width);
-            DescRow("dwPitchOrLinearSize", desc.pitchOrLinearSize);
-            DescRow("dwDepth", desc.depth);
-            DescRow("dwMipMapCount", desc.mipMapCount);
-            DescRow("dwCaps", desc.caps);
-            DescRow("dwCaps2", desc.caps2);
-            DescRow("dwCaps3", desc.caps3);
-            DescRow("dwCaps4", desc.caps4);
-            DescRow("dwReserved2", desc.reserved2);
+            FourCCRow("magic", desc.magic, DescribeDdsHeaderField("magic"));
+            DescRow("dwSize", desc.size, DescribeDdsHeaderField("dwSize"));
+            DescRow("dwFlags", desc.flags, DescribeDdsHeaderField("dwFlags"));
+            DescRow("dwHeight", desc.height, DescribeDdsHeaderField("dwHeight"));
+            DescRow("dwWidth", desc.width, DescribeDdsHeaderField("dwWidth"));
+            DescRow("dwPitchOrLinearSize", desc.pitchOrLinearSize, DescribeDdsHeaderField("dwPitchOrLinearSize"));
+            DescRow("dwDepth", desc.depth, DescribeDdsHeaderField("dwDepth"));
+            DescRow("dwMipMapCount", desc.mipMapCount, DescribeDdsHeaderField("dwMipMapCount"));
+            DescRow("dwCaps", FormatFlagNames(desc.caps, kDdsCapsFlags), desc.caps, DescribeDdsHeaderField("dwCaps"));
+            DescRow("dwCaps2", FormatFlagNames(desc.caps2, kDdsCaps2Flags), desc.caps2, DescribeDdsHeaderField("dwCaps2"));
+            DescRow("dwCaps3", desc.caps3, DescribeDdsHeaderField("dwCaps3"));
+            DescRow("dwCaps4", desc.caps4, DescribeDdsHeaderField("dwCaps4"));
+            DescRow("dwReserved2", desc.reserved2, DescribeDdsHeaderField("dwReserved2"));
             ImGui::EndTable();
         }
     }
@@ -217,14 +481,14 @@ static void DrawDdsDescSection(const DdsDescInfo& desc) {
 
     if (ImGui::CollapsingHeader("ddspf", ImGuiTreeNodeFlags_DefaultOpen)) {
         if (BeginDescTable("dds_pixel_format")) {
-            DescRow("dwSize", desc.pixelFormat.size);
-            DescRow("dwFlags", desc.pixelFormat.flags);
-            FourCCRow("dwFourCC", desc.pixelFormat.fourCC);
-            DescRow("dwRGBBitCount", desc.pixelFormat.rgbBitCount);
-            DescRow("dwRBitMask", desc.pixelFormat.rBitMask);
-            DescRow("dwGBitMask", desc.pixelFormat.gBitMask);
-            DescRow("dwBBitMask", desc.pixelFormat.bBitMask);
-            DescRow("dwABitMask", desc.pixelFormat.aBitMask);
+            DescRow("dwSize", desc.pixelFormat.size, DescribeDdsPixelFormatField("dwSize"));
+            DescRow("dwFlags", desc.pixelFormat.flags, DescribeDdsPixelFormatField("dwFlags"));
+            FourCCRow("dwFourCC", desc.pixelFormat.fourCC, DescribeDdsPixelFormatField("dwFourCC"));
+            DescRow("dwRGBBitCount", desc.pixelFormat.rgbBitCount, DescribeDdsPixelFormatField("dwRGBBitCount"));
+            DescRow("dwRBitMask", desc.pixelFormat.rBitMask, DescribeDdsPixelFormatField("dwRBitMask"));
+            DescRow("dwGBitMask", desc.pixelFormat.gBitMask, DescribeDdsPixelFormatField("dwGBitMask"));
+            DescRow("dwBBitMask", desc.pixelFormat.bBitMask, DescribeDdsPixelFormatField("dwBBitMask"));
+            DescRow("dwABitMask", desc.pixelFormat.aBitMask, DescribeDdsPixelFormatField("dwABitMask"));
             ImGui::EndTable();
         }
     }
@@ -233,7 +497,7 @@ static void DrawDdsDescSection(const DdsDescInfo& desc) {
         if (BeginDescTable("dds_reserved1")) {
             for (size_t i = 0; i < desc.reserved1.size(); ++i) {
                 const std::string name = std::format("dwReserved1[{}]", i);
-                DescRow(name.c_str(), desc.reserved1[i]);
+                DescRow(name.c_str(), desc.reserved1[i], "Reserved DDS_HEADER field. DDS writers should set this to 0.");
             }
             ImGui::EndTable();
         }
@@ -241,11 +505,11 @@ static void DrawDdsDescSection(const DdsDescInfo& desc) {
 
     if (desc.dx10Header && ImGui::CollapsingHeader("DDS_HEADER_DXT10", ImGuiTreeNodeFlags_DefaultOpen)) {
         if (BeginDescTable("dds_dx10")) {
-            DescRow("dxgiFormat", desc.dx10Header->dxgiFormat);
-            DescRow("resourceDimension", desc.dx10Header->resourceDimension);
-            DescRow("miscFlag", desc.dx10Header->miscFlag);
-            DescRow("arraySize", desc.dx10Header->arraySize);
-            DescRow("miscFlags2", desc.dx10Header->miscFlags2);
+            DescRow("dxgiFormat", desc.dx10Header->dxgiFormat, DescribeDdsDx10Field("dxgiFormat"));
+            DescRow("resourceDimension", desc.dx10Header->resourceDimension, DescribeDdsDx10Field("resourceDimension"));
+            DescRow("miscFlag", desc.dx10Header->miscFlag, DescribeDdsDx10Field("miscFlag"));
+            DescRow("arraySize", desc.dx10Header->arraySize, DescribeDdsDx10Field("arraySize"));
+            DescRow("miscFlags2", desc.dx10Header->miscFlags2, DescribeDdsDx10Field("miscFlags2"));
             ImGui::EndTable();
         }
     }
@@ -261,7 +525,7 @@ static void DrawDdsDescWindow(bool& open, const TextureData& data) {
     ImGui::TextUnformatted(data.fileName.c_str());
     ImGui::Separator();
     if (data.ddsDesc) {
-        DrawDdsDescSection(*data.ddsDesc);
+        DrawDdsDescSection(data, *data.ddsDesc);
     } else {
         ImGui::TextDisabled("No DDS desc data is available for this file.");
     }
@@ -328,17 +592,20 @@ bool UIPanel::Draw(TextureView& view, const TextureData* data,
             showDdsDesc_ = true;
         }
     }
-    ImGui::TextDisabled("%s image  %ux%u",
-        data->containerName.empty() ? "Loaded" : data->containerName.c_str(),
-        data->baseWidth, data->baseHeight);
-    const std::string fileSize = FormatFileSize(data->fileSizeBytes);
-    ImGui::TextDisabled("%s  %s", data->formatName.c_str(), fileSize.c_str());
-    if (data->mipCount > 1 || data->layerCount > 1 || data->isCubemap || data->is3D) {
-        ImGui::TextDisabled("%u mip%s  %u layer%s%s%s",
-            data->mipCount,   data->mipCount   > 1 ? "s" : "",
-            data->layerCount, data->layerCount > 1 ? "s" : "",
-            data->isCubemap ? "  cubemap" : "",
-            data->is3D ? "  3D" : "");
+
+    const float infoWidth = std::min(540.0f, std::max(320.0f, io.DisplaySize.x * 0.42f));
+    if (ImGui::BeginTable("file_summary", 4,
+        ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_NoPadOuterX,
+        ImVec2(infoWidth, 0.0f))) {
+        SummaryCell("Type", FormatTextureType(*data));
+        SummaryCell("Size", FormatDimensions(*data));
+        SummaryCell("Format", data->formatName.empty() ? "Unknown" : data->formatName);
+        SummaryCell("File", FormatFileSize(data->fileSizeBytes));
+        SummaryCell("Mips", FormatMipSummary(*data));
+        SummaryCell(data->is3D ? "Depth" : data->isCubemap ? "Faces" : "Layers", FormatSliceSummary(*data));
+        SummaryCell("Container", data->containerName.empty() ? "Image" : data->containerName);
+        SummaryCell("Pixels", FormatPreviewStorage(*data));
+        ImGui::EndTable();
     }
     ImGui::EndGroup();
 
