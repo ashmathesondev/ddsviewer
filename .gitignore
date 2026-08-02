@@ -35,5 +35,5 @@ Thumbs.db
 !dist/*.pdb
 !dist/*.lib
 **.log
-dist-v0.3.0.zip
+dist-v*.zip
 .run/ddsviewer.run.xml
